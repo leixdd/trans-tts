@@ -2,22 +2,16 @@
 
 namespace App\Services;
 
-use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use App\Models\TranslationTurn;
 use Illuminate\Filesystem\FilesystemAdapter;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class TranslationWorkflowStore
 {
-    private const CACHE_PREFIX = 'translation_workflow:';
-
-    private const INDEX_KEY = 'translation_workflows:index';
-
     private const AUDIO_DIRECTORY = 'translation-audio';
 
     private const WORKER_LOGS_MAX_BYTES = 16_000;
@@ -25,7 +19,7 @@ class TranslationWorkflowStore
     /**
      * @return array{
      *     id: string,
-     *     session_id: string,
+     *     visitor_id: string,
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
@@ -38,19 +32,14 @@ class TranslationWorkflowStore
      *     expires_at: string
      * }
      */
-    public function create(string $sessionId, string $sourceText): array
+    public function create(string $visitorId, string $sourceText): array
     {
-        if ($sessionId === '') {
-            throw new RuntimeException('A session id is required to create a translation workflow.');
+        if ($visitorId === '') {
+            throw new RuntimeException('A visitor id is required to create a translation turn.');
         }
 
-        $now = now();
-        $retentionMinutes = $this->retentionMinutes();
-        $id = (string) Str::uuid();
-
-        $workflow = [
-            'id' => $id,
-            'session_id' => $sessionId,
+        $turn = TranslationTurn::query()->create([
+            'visitor_id' => $visitorId,
             'status' => 'queued',
             'source_text' => $sourceText,
             'translation' => null,
@@ -58,21 +47,18 @@ class TranslationWorkflowStore
             'worker_logs' => null,
             'audio_path' => null,
             'error' => null,
-            'created_at' => $now->toIso8601String(),
-            'updated_at' => $now->toIso8601String(),
-            'expires_at' => $now->addMinutes($retentionMinutes)->toIso8601String(),
-        ];
+            'expires_at' => now()->addDays($this->retentionDays()),
+        ]);
 
-        $this->put($workflow);
-        $this->rememberInIndex($id);
+        $this->enforceHistoryLimit($visitorId);
 
-        return $workflow;
+        return $this->toArray($turn);
     }
 
     /**
      * @return array{
      *     id: string,
-     *     session_id: string,
+     *     visitor_id: string,
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
@@ -87,26 +73,25 @@ class TranslationWorkflowStore
      */
     public function find(string $id): ?array
     {
-        /** @var mixed $workflow */
-        $workflow = $this->cache()->get($this->cacheKey($id));
+        $turn = TranslationTurn::query()->find($id);
 
-        if (! is_array($workflow)) {
+        if ($turn === null) {
             return null;
         }
 
-        if ($this->isExpired($workflow)) {
+        if ($this->isExpired($this->toArray($turn))) {
             $this->forget($id);
 
             return null;
         }
 
-        return $this->normalize($workflow);
+        return $this->toArray($turn);
     }
 
     /**
      * @param  array{
      *     id: string,
-     *     session_id: string,
+     *     visitor_id: string,
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
@@ -119,51 +104,41 @@ class TranslationWorkflowStore
      *     expires_at: string
      * }  $workflow
      */
-    public function assertOwnedBySession(array $workflow, string $sessionId): void
+    public function assertOwnedByVisitor(array $workflow, string $visitorId): void
     {
-        if ($workflow['session_id'] !== $sessionId) {
-            throw new AccessDeniedHttpException('This translation workflow belongs to another session.');
+        if ($workflow['visitor_id'] !== $visitorId) {
+            throw new AccessDeniedHttpException('This translation turn belongs to another visitor.');
         }
     }
 
     public function markStatus(string $id, string $status): void
     {
-        $workflow = $this->require($id);
-        $workflow['status'] = $status;
-        $workflow['updated_at'] = now()->toIso8601String();
-        $this->put($workflow);
+        $turn = $this->requireModel($id);
+        $turn->status = $status;
+        $turn->save();
     }
 
     public function setTranslation(string $id, string $translation): void
     {
-        $workflow = $this->require($id);
-        $workflow['translation'] = $translation;
-        $workflow['updated_at'] = now()->toIso8601String();
-        $this->put($workflow);
+        $turn = $this->requireModel($id);
+        $turn->translation = $translation;
+        $turn->save();
     }
 
-    /**
-     * Append a Novita SSE debug line and the accumulated streamed translation.
-     */
     public function appendStreamDebug(string $id, string $accumulated, string $rawSseData): void
     {
-        $workflow = $this->require($id);
-        $existing = $workflow['stream_debug'] ?? '';
-
+        $turn = $this->requireModel($id);
+        $existing = $turn->stream_debug ?? '';
         $line = 'delta: '.$rawSseData."\n".'accumulated: '.$accumulated."\n---\n";
-        $workflow['stream_debug'] = $existing.$line;
-        $workflow['translation'] = $accumulated;
-        $workflow['updated_at'] = now()->toIso8601String();
-        $this->put($workflow);
+        $turn->stream_debug = $existing.$line;
+        $turn->translation = $accumulated;
+        $turn->save();
     }
 
-    /**
-     * Append a timestamped worker/debug log line for UI diagnostics.
-     */
     public function appendWorkerLog(string $id, string $message): void
     {
-        $workflow = $this->require($id);
-        $existing = $workflow['worker_logs'] ?? '';
+        $turn = $this->requireModel($id);
+        $existing = $turn->worker_logs ?? '';
         $line = '['.now()->format('H:i:s').'] '.$message."\n";
         $logs = $existing.$line;
 
@@ -171,77 +146,65 @@ class TranslationWorkflowStore
             $logs = substr($logs, -self::WORKER_LOGS_MAX_BYTES);
         }
 
-        $workflow['worker_logs'] = $logs;
-        $workflow['updated_at'] = now()->toIso8601String();
-        $this->put($workflow);
+        $turn->worker_logs = $logs;
+        $turn->save();
     }
 
     public function storeAudio(string $id, string $wavBytes): string
     {
-        $workflow = $this->require($id);
+        $turn = $this->requireModel($id);
         $path = self::AUDIO_DIRECTORY.'/'.$id.'.wav';
-
         $this->disk()->put($path, $wavBytes);
-
-        $workflow['audio_path'] = $path;
-        $workflow['updated_at'] = now()->toIso8601String();
-        $this->put($workflow);
+        $turn->audio_path = $path;
+        $turn->save();
 
         return $path;
     }
 
     public function markFailed(string $id, string $error): void
     {
-        $workflow = $this->require($id);
-        $workflow['status'] = 'failed';
-        $workflow['error'] = $error;
-        $workflow['updated_at'] = now()->toIso8601String();
-        $this->put($workflow);
+        $turn = $this->requireModel($id);
+        $turn->status = 'failed';
+        $turn->error = $error;
+        $turn->save();
     }
 
     public function markCompleted(string $id): void
     {
-        $workflow = $this->require($id);
-        $workflow['status'] = 'completed';
-        $workflow['error'] = null;
-        $workflow['updated_at'] = now()->toIso8601String();
-        $this->put($workflow);
+        $turn = $this->requireModel($id);
+        $turn->status = 'completed';
+        $turn->error = null;
+        $turn->save();
     }
 
     public function forget(string $id): void
     {
-        $workflow = $this->cache()->get($this->cacheKey($id));
+        $turn = TranslationTurn::query()->find($id);
 
-        if (is_array($workflow)) {
-            $path = $workflow['audio_path'] ?? null;
-            if (is_string($path) && $path !== '') {
-                $this->disk()->delete($path);
+        if ($turn !== null) {
+            if (is_string($turn->audio_path) && $turn->audio_path !== '') {
+                $this->disk()->delete($turn->audio_path);
             }
+
+            $turn->delete();
         } else {
             $this->disk()->delete(self::AUDIO_DIRECTORY.'/'.$id.'.wav');
         }
-
-        $this->cache()->forget($this->cacheKey($id));
-        $this->forgetFromIndex($id);
     }
 
-    /**
-     * Remove expired cache entries and orphaned private WAV files.
-     */
     public function cleanupExpired(): int
     {
         $removed = 0;
-        $ids = $this->indexedIds();
 
-        foreach ($ids as $id) {
-            /** @var mixed $workflow */
-            $workflow = $this->cache()->get($this->cacheKey($id));
-
-            if (! is_array($workflow) || $this->isExpired($workflow)) {
-                $this->forget($id);
-                $removed++;
-            }
-        }
+        TranslationTurn::query()
+            ->where('expires_at', '<', now())
+            ->orderBy('created_at')
+            ->chunkById(100, function ($turns) use (&$removed): void {
+                foreach ($turns as $turn) {
+                    $this->forget($turn->id);
+                    $removed++;
+                }
+            });
 
         foreach ($this->disk()->files(self::AUDIO_DIRECTORY) as $path) {
             $filename = basename($path);
@@ -269,7 +232,7 @@ class TranslationWorkflowStore
 
         return URL::temporarySignedRoute(
             'translations.audio',
-            now()->addMinutes($this->retentionMinutes()),
+            now()->addMinutes($this->signedUrlMinutes()),
             ['workflow' => $id],
         );
     }
@@ -277,7 +240,7 @@ class TranslationWorkflowStore
     /**
      * @return array{
      *     id: string,
-     *     session_id: string,
+     *     visitor_id: string,
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
@@ -290,47 +253,72 @@ class TranslationWorkflowStore
      *     expires_at: string
      * }
      */
-    public function requireOwned(string $id, string $sessionId): array
+    public function requireOwned(string $id, string $visitorId): array
     {
         $workflow = $this->find($id);
 
         if ($workflow === null) {
-            throw new NotFoundHttpException('Translation workflow not found or expired.');
+            throw new NotFoundHttpException('Translation turn not found or expired.');
         }
 
-        $this->assertOwnedBySession($workflow, $sessionId);
+        $this->assertOwnedByVisitor($workflow, $visitorId);
 
         return $workflow;
     }
 
     /**
-     * Session-scoped polling payload for the UI (never includes source_text or audio_path).
+     * Session-scoped polling payload for the UI (never includes audio_path).
      *
      * @return array{
      *     id: string,
      *     status: string,
+     *     source_text: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
      *     audio_url: string|null,
-     *     error: string|null
+     *     error: string|null,
+     *     created_at: string
      * }
      */
-    public function publicStatus(string $id, string $sessionId): array
+    public function publicStatus(string $id, string $visitorId): array
     {
-        $workflow = $this->requireOwned($id, $sessionId);
+        $workflow = $this->requireOwned($id, $visitorId);
 
-        return [
-            'id' => $workflow['id'],
-            'status' => $workflow['status'],
-            'translation' => $workflow['translation'],
-            'stream_debug' => $workflow['stream_debug'],
-            'worker_logs' => $workflow['worker_logs'],
-            'audio_url' => $workflow['status'] === 'completed'
-                ? $this->signedAudioUrl($id)
-                : null,
-            'error' => $workflow['error'],
-        ];
+        return $this->toPublicPayload($workflow);
+    }
+
+    /**
+     * Latest turns for a visitor, oldest first (chat order).
+     *
+     * @return list<array{
+     *     id: string,
+     *     status: string,
+     *     source_text: string,
+     *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
+     *     audio_url: string|null,
+     *     error: string|null,
+     *     created_at: string
+     * }>
+     */
+    public function listForVisitor(string $visitorId): array
+    {
+        $limit = $this->historyLimit();
+
+        $turns = TranslationTurn::query()
+            ->where('visitor_id', $visitorId)
+            ->where('expires_at', '>', now())
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get()
+            ->sortBy('created_at')
+            ->values();
+
+        return array_values($turns
+            ->map(fn (TranslationTurn $turn): array => $this->toPublicPayload($this->toArray($turn)))
+            ->all());
     }
 
     /**
@@ -347,37 +335,40 @@ class TranslationWorkflowStore
         return now()->greaterThan($expiresAt);
     }
 
-    /**
-     * @return array{
-     *     id: string,
-     *     session_id: string,
-     *     status: string,
-     *     source_text: string,
-     *     translation: string|null,
-     *     stream_debug: string|null,
-     *     worker_logs: string|null,
-     *     audio_path: string|null,
-     *     error: string|null,
-     *     created_at: string,
-     *     updated_at: string,
-     *     expires_at: string
-     * }
-     */
-    private function require(string $id): array
+    private function enforceHistoryLimit(string $visitorId): void
     {
-        $workflow = $this->find($id);
+        $limit = $this->historyLimit();
+        $ids = TranslationTurn::query()
+            ->where('visitor_id', $visitorId)
+            ->orderByDesc('created_at')
+            ->skip($limit)
+            ->take(1000)
+            ->pluck('id');
 
-        if ($workflow === null) {
-            throw new RuntimeException('Translation workflow not found or expired.');
+        foreach ($ids as $id) {
+            $this->forget((string) $id);
+        }
+    }
+
+    private function requireModel(string $id): TranslationTurn
+    {
+        $turn = TranslationTurn::query()->find($id);
+
+        if ($turn === null || $turn->expires_at->isPast()) {
+            if ($turn !== null) {
+                $this->forget($id);
+            }
+
+            throw new RuntimeException('Translation turn not found or expired.');
         }
 
-        return $workflow;
+        return $turn;
     }
 
     /**
      * @param  array{
      *     id: string,
-     *     session_id: string,
+     *     visitor_id: string,
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
@@ -389,78 +380,39 @@ class TranslationWorkflowStore
      *     updated_at: string,
      *     expires_at: string
      * }  $workflow
-     */
-    private function put(array $workflow): void
-    {
-        $this->cache()->put(
-            $this->cacheKey($workflow['id']),
-            $workflow,
-            now()->addMinutes($this->retentionMinutes()),
-        );
-    }
-
-    private function cacheKey(string $id): string
-    {
-        return self::CACHE_PREFIX.$id;
-    }
-
-    private function retentionMinutes(): int
-    {
-        $minutes = (int) config('services.novita.retention_minutes', 60);
-
-        return max(1, $minutes);
-    }
-
-    private function cache(): CacheRepository
-    {
-        return Cache::store();
-    }
-
-    private function disk(): FilesystemAdapter
-    {
-        /** @var FilesystemAdapter $disk */
-        $disk = Storage::disk('local');
-
-        return $disk;
-    }
-
-    private function rememberInIndex(string $id): void
-    {
-        $ids = $this->indexedIds();
-        $ids[] = $id;
-        $this->cache()->put(self::INDEX_KEY, array_values(array_unique($ids)), now()->addDays(7));
-    }
-
-    private function forgetFromIndex(string $id): void
-    {
-        $ids = array_values(array_filter(
-            $this->indexedIds(),
-            static fn (string $indexedId): bool => $indexedId !== $id,
-        ));
-
-        $this->cache()->put(self::INDEX_KEY, $ids, now()->addDays(7));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function indexedIds(): array
-    {
-        /** @var mixed $ids */
-        $ids = $this->cache()->get(self::INDEX_KEY, []);
-
-        if (! is_array($ids)) {
-            return [];
-        }
-
-        return array_values(array_filter($ids, static fn (mixed $id): bool => is_string($id) && $id !== ''));
-    }
-
-    /**
-     * @param  array<string, mixed>  $workflow
      * @return array{
      *     id: string,
-     *     session_id: string,
+     *     status: string,
+     *     source_text: string,
+     *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
+     *     audio_url: string|null,
+     *     error: string|null,
+     *     created_at: string
+     * }
+     */
+    private function toPublicPayload(array $workflow): array
+    {
+        return [
+            'id' => $workflow['id'],
+            'status' => $workflow['status'],
+            'source_text' => $workflow['source_text'],
+            'translation' => $workflow['translation'],
+            'stream_debug' => $workflow['stream_debug'],
+            'worker_logs' => $workflow['worker_logs'],
+            'audio_url' => $workflow['status'] === 'completed'
+                ? $this->signedAudioUrl($workflow['id'])
+                : null,
+            'error' => $workflow['error'],
+            'created_at' => $workflow['created_at'],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     id: string,
+     *     visitor_id: string,
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
@@ -473,31 +425,44 @@ class TranslationWorkflowStore
      *     expires_at: string
      * }
      */
-    private function normalize(array $workflow): array
+    private function toArray(TranslationTurn $turn): array
     {
         return [
-            'id' => (string) ($workflow['id'] ?? ''),
-            'session_id' => (string) ($workflow['session_id'] ?? ''),
-            'status' => (string) ($workflow['status'] ?? 'failed'),
-            'source_text' => (string) ($workflow['source_text'] ?? ''),
-            'translation' => isset($workflow['translation']) && is_string($workflow['translation'])
-                ? $workflow['translation']
-                : null,
-            'stream_debug' => isset($workflow['stream_debug']) && is_string($workflow['stream_debug'])
-                ? $workflow['stream_debug']
-                : null,
-            'worker_logs' => isset($workflow['worker_logs']) && is_string($workflow['worker_logs'])
-                ? $workflow['worker_logs']
-                : null,
-            'audio_path' => isset($workflow['audio_path']) && is_string($workflow['audio_path'])
-                ? $workflow['audio_path']
-                : null,
-            'error' => isset($workflow['error']) && is_string($workflow['error'])
-                ? $workflow['error']
-                : null,
-            'created_at' => (string) ($workflow['created_at'] ?? ''),
-            'updated_at' => (string) ($workflow['updated_at'] ?? ''),
-            'expires_at' => (string) ($workflow['expires_at'] ?? ''),
+            'id' => $turn->id,
+            'visitor_id' => $turn->visitor_id,
+            'status' => $turn->status,
+            'source_text' => $turn->source_text,
+            'translation' => $turn->translation,
+            'stream_debug' => $turn->stream_debug,
+            'worker_logs' => $turn->worker_logs,
+            'audio_path' => $turn->audio_path,
+            'error' => $turn->error,
+            'created_at' => $turn->created_at?->toIso8601String() ?? '',
+            'updated_at' => $turn->updated_at?->toIso8601String() ?? '',
+            'expires_at' => $turn->expires_at->toIso8601String(),
         ];
+    }
+
+    private function retentionDays(): int
+    {
+        return max(1, (int) config('services.novita.retention_days', 30));
+    }
+
+    private function historyLimit(): int
+    {
+        return max(1, (int) config('services.novita.history_limit', 50));
+    }
+
+    private function signedUrlMinutes(): int
+    {
+        return max(1, (int) config('services.novita.signed_url_minutes', 60));
+    }
+
+    private function disk(): FilesystemAdapter
+    {
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk('local');
+
+        return $disk;
     }
 }

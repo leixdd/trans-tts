@@ -1,6 +1,6 @@
 # English → Japanese Translation & TTS
 
-Public web app that accepts English text, translates it to Japanese via Novita (`google/gemma-4-31b-it`), and synthesizes Japanese speech with Fish Audio S2 Pro (WAV). Translation and TTS run in a queued background job; the Livewire UI polls workflow status until completion or failure.
+Public chat-style web app that accepts English messages, translates them to Japanese via Novita (`google/gemma-4-31b-it`), and synthesizes Japanese speech with Fish Audio S2 Pro (WAV). Each turn is queued in the background; the Livewire UI shows an ordered history, polls in-flight turns, and autoplays completed audio in submission order (FIFO).
 
 **Stack:** Laravel 13, Livewire 4, Laravel Octane (FrankenPHP), Bun + Vite + Tailwind CSS 4.
 
@@ -36,7 +36,9 @@ php artisan key:generate
 | `NOVITA_TTS_ENDPOINT` | `https://api.novita.ai/v3/fish-audio-s2-pro-text-to-speech` |
 | `NOVITA_TRANSLATION_MODEL` | `google/gemma-4-31b-it` |
 | `NOVITA_TIMEOUT` | `60` (seconds) |
-| `NOVITA_RETENTION_MINUTES` | `60` |
+| `NOVITA_RETENTION_DAYS` | `30` (anonymous chat history lifetime) |
+| `NOVITA_HISTORY_LIMIT` | `50` (max turns kept per visitor) |
+| `NOVITA_SIGNED_URL_MINUTES` | `60` (temporary audio URL lifetime) |
 | `NOVITA_USER_AGENT` | `tts-app/1.0` |
 
 Octane settings (`OCTANE_SERVER`, `OCTANE_HOST`, `OCTANE_PORT`, etc.) are documented in `.env.example`.
@@ -90,9 +92,13 @@ Services:
 
 Shared volumes persist the SQLite database and private WAV files under `storage/app`.
 
-## Transient storage
+## Chat history and audio
 
-Workflow status (cache) and generated WAV files are **not** permanent history. They expire after `NOVITA_RETENTION_MINUTES` (default 60). The `translations:prune` command removes expired cache entries and private audio files; it is scheduled hourly in `routes/console.php`. Audio is served only via signed URLs tied to the owning browser session.
+Turns are stored in the `translation_turns` table and keyed by an anonymous encrypted `tts_visitor` cookie (not a user account). Each visitor keeps at most `NOVITA_HISTORY_LIMIT` turns for `NOVITA_RETENTION_DAYS`. Private WAV files live under `storage/app/private/translation-audio` and are streamed only through signed URLs for the owning visitor.
+
+Autoplay uses a browser FIFO queue ordered by submission time. Later turns wait for earlier ones; failed turns are skipped. If the browser blocks autoplay, a **Play now** control appears for that turn.
+
+The `translations:prune` command removes expired turns and orphaned audio files; it is scheduled hourly in `routes/console.php`.
 
 Manual prune:
 
@@ -104,7 +110,7 @@ php artisan translations:prune
 
 ```bash
 composer test          # lint + PHPStan + Pest
-vendor/bin/pest        # feature tests only (32 tests)
+vendor/bin/pest        # feature tests only
 composer lint:check    # Pint dry-run
 composer types:check   # PHPStan (512M memory limit)
 bun run build          # production asset build

@@ -15,13 +15,13 @@ class PruneTranslationWorkflows extends Command
     /**
      * @var string
      */
-    protected $description = 'Prune expired translation workflow cache entries and private audio files';
+    protected $description = 'Prune expired translation turns and private audio files';
 
     public function handle(TranslationWorkflowStore $store): int
     {
         $removed = $store->cleanupExpired();
 
-        $this->info("Pruned {$removed} expired translation workflow artifact(s).");
+        $this->info("Pruned {$removed} expired translation turn artifact(s).");
 
         return self::SUCCESS;
     }

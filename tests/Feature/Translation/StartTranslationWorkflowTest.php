@@ -11,19 +11,19 @@ beforeEach(function () {
 });
 
 it('rejects empty text when starting a workflow', function () {
-    expect(fn () => app(StartTranslationWorkflow::class)('session-a', ''))
+    expect(fn () => app(StartTranslationWorkflow::class)('visitor-a', ''))
         ->toThrow(ValidationException::class);
 });
 
 it('rejects text longer than 10000 characters when starting a workflow', function () {
-    expect(fn () => app(StartTranslationWorkflow::class)('session-a', str_repeat('a', 10001)))
+    expect(fn () => app(StartTranslationWorkflow::class)('visitor-a', str_repeat('a', 10001)))
         ->toThrow(ValidationException::class);
 });
 
 it('returns queued status and dispatches the synthesis job on success', function () {
     Queue::fake();
 
-    $result = app(StartTranslationWorkflow::class)('session-a', 'Hello world');
+    $result = app(StartTranslationWorkflow::class)('visitor-a', 'Hello world');
 
     expect($result)->toMatchArray([
         'status' => 'queued',
@@ -37,7 +37,8 @@ it('returns queued status and dispatches the synthesis job on success', function
     $workflow = app(TranslationWorkflowStore::class)->find($result['id']);
     expect($workflow)->not->toBeNull()
         ->and($workflow['status'])->toBe('queued')
+        ->and($workflow['visitor_id'])->toBe('visitor-a')
         ->and($workflow['source_text'])->toBe('Hello world')
-        ->and($workflow['worker_logs'])->toContain('Workflow created')
+        ->and($workflow['worker_logs'])->toContain('Turn created')
         ->and($workflow['worker_logs'])->toContain('Job dispatched to queue');
 });

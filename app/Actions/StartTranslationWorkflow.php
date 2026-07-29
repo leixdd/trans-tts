@@ -15,33 +15,33 @@ class StartTranslationWorkflow
     ) {}
 
     /**
-     * Validate input, create a queued workflow, and dispatch synthesis.
+     * Validate input, create a queued turn, and dispatch synthesis.
      *
      * @return array{id: string, status: string}
      *
      * @throws ValidationException
      */
-    public function __invoke(string $sessionId, string $text): array
+    public function __invoke(string $visitorId, string $text): array
     {
         $validated = Validator::make(
             [
-                'session_id' => $sessionId,
+                'visitor_id' => $visitorId,
                 'text' => $text,
             ],
             [
-                'session_id' => ['required', 'string'],
+                'visitor_id' => ['required', 'string'],
                 'text' => StartTranslationRequest::textRules(),
             ],
         )->validate();
 
         $workflow = $this->store->create(
-            $validated['session_id'],
+            $validated['visitor_id'],
             $validated['text'],
         );
 
         $this->store->appendWorkerLog(
             $workflow['id'],
-            'Workflow created (status=queued)',
+            'Turn created (status=queued)',
         );
 
         TranslateAndSynthesizeSpeech::dispatch($workflow['id']);

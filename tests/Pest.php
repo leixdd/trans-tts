@@ -1,13 +1,16 @@
 <?php
 
 use App\Jobs\TranslateAndSynthesizeSpeech;
+use App\Services\AnonymousVisitor;
 use App\Services\NovitaSpeechService;
 use App\Services\NovitaTranslationService;
 use App\Services\TranslationWorkflowStore;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
-uses(TestCase::class)->in('Feature', 'Unit');
+uses(TestCase::class, RefreshDatabase::class)->in('Feature');
+uses(TestCase::class)->in('Unit');
 
 function configureNovitaForTests(array $overrides = []): void
 {
@@ -18,7 +21,9 @@ function configureNovitaForTests(array $overrides = []): void
         'services.novita.translation_model' => $overrides['translation_model'] ?? 'google/gemma-4-31b-it',
         'services.novita.fish_reference_id' => $overrides['fish_reference_id'] ?? 'test-fish-ref',
         'services.novita.timeout' => $overrides['timeout'] ?? 60,
-        'services.novita.retention_minutes' => $overrides['retention_minutes'] ?? 60,
+        'services.novita.retention_days' => $overrides['retention_days'] ?? 30,
+        'services.novita.history_limit' => $overrides['history_limit'] ?? 50,
+        'services.novita.signed_url_minutes' => $overrides['signed_url_minutes'] ?? 60,
         'services.novita.user_agent' => $overrides['user_agent'] ?? 'tts-app-test/1.0',
     ]);
 }
@@ -87,4 +92,9 @@ function runJobToFailure(string $workflowId): void
     } catch (Throwable $exception) {
         $job->failed($exception);
     }
+}
+
+function withVisitorCookie(string $visitorId): array
+{
+    return [AnonymousVisitor::COOKIE_NAME => $visitorId];
 }

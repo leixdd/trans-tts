@@ -1,7 +1,10 @@
 <?php
 
+use App\Jobs\TranslateAndSynthesizeSpeech;
 use App\Livewire\TranslationWorkspace;
+use App\Services\AnonymousVisitor;
 use App\Services\TranslationWorkflowStore;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -22,62 +25,107 @@ it('shows validation errors for oversized submit', function () {
         ->assertHasErrors(['text' => 'max']);
 });
 
-it('does not submit again while a workflow is in flight', function () {
-    Livewire::test(TranslationWorkspace::class)
-        ->set('text', 'Hello')
-        ->set('workflowId', 'existing-workflow')
-        ->set('status', 'translating')
+it('allows another submit while a turn is still in flight', function () {
+    Queue::fake();
+
+    $visitorId = '33333333-3333-4333-8333-333333333333';
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->set('text', 'First')
         ->call('submit')
-        ->assertSet('workflowId', 'existing-workflow')
-        ->assertSet('status', 'translating');
+        ->assertSet('text', '')
+        ->set('text', 'Second')
+        ->call('submit')
+        ->assertCount('turns', 2);
+
+    Queue::assertPushed(TranslateAndSynthesizeSpeech::class, 2);
 });
 
-it('updates status from pollStatus when the workflow completes', function () {
-    $this->startSession();
-    $sessionId = session()->getId();
-
+it('restores visitor history after remount', function () {
+    $visitorId = '44444444-4444-4444-8444-444444444444';
     $store = app(TranslationWorkflowStore::class);
-    $workflow = $store->create($sessionId, 'Hello');
+    $turn = $store->create($visitorId, 'Hello history');
+    $store->setTranslation($turn['id'], '履歴');
+    $store->storeAudio($turn['id'], fakeWavBytes());
+    $store->markCompleted($turn['id']);
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->assertSee('Hello history')
+        ->assertSee('履歴')
+        ->assertCount('turns', 1);
+});
+
+it('polls in-flight turns to completed state and dispatches FIFO audio events', function () {
+    $visitorId = '55555555-5555-4555-8555-555555555555';
+    $store = app(TranslationWorkflowStore::class);
+    $turn = $store->create($visitorId, 'Hello');
     $store->appendStreamDebug(
-        $workflow['id'],
+        $turn['id'],
         '翻訳完了',
         '{"choices":[{"delta":{"content":"翻訳完了"}}]}',
     );
-    $store->setTranslation($workflow['id'], '翻訳完了');
-    $store->storeAudio($workflow['id'], fakeWavBytes());
-    $store->markCompleted($workflow['id']);
+    $store->setTranslation($turn['id'], '翻訳完了');
+    $store->storeAudio($turn['id'], fakeWavBytes());
+    $store->markCompleted($turn['id']);
+    $store->appendWorkerLog($turn['id'], 'Workflow completed');
 
-    $store->appendWorkerLog($workflow['id'], 'Workflow completed');
-
-    $component = Livewire::test(TranslationWorkspace::class)
-        ->set('text', 'Hello')
-        ->set('workflowId', $workflow['id'])
-        ->set('status', 'synthesizing')
+    $component = Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->set('turns', [[
+            'id' => $turn['id'],
+            'status' => 'synthesizing',
+            'source_text' => 'Hello',
+            'translation' => null,
+            'stream_debug' => null,
+            'worker_logs' => null,
+            'audio_url' => null,
+            'error' => null,
+            'created_at' => now()->toIso8601String(),
+        ]])
+        ->set('debugTurnId', $turn['id'])
         ->call('pollStatus')
-        ->assertSet('status', 'completed')
-        ->assertSet('translation', '翻訳完了')
+        ->assertDispatched('translation-audio-ready')
+        ->assertDontSee('Worker debug logs')
+        ->call('toggleDebugLogs')
+        ->assertSet('showDebugLogs', true)
         ->assertSee('Worker debug logs')
         ->assertSee('Novita stream debug')
-        ->assertNotSet('audioUrl', null);
+        ->assertSee('翻訳完了');
 
-    expect($component->get('streamDebug'))->toContain('accumulated: 翻訳完了')
-        ->and($component->get('workerLogs'))->toContain('Workflow completed');
+    $turns = $component->get('turns');
+    expect($turns[0]['status'])->toBe('completed')
+        ->and($turns[0]['audio_url'])->not->toBeNull()
+        ->and($turns[0]['stream_debug'])->toContain('accumulated: 翻訳完了')
+        ->and($turns[0]['worker_logs'])->toContain('Workflow completed');
 });
 
-it('retains English input and exposes failure state for retry', function () {
-    $this->startSession();
-    $sessionId = session()->getId();
-
-    $store = app(TranslationWorkflowStore::class);
-    $workflow = $store->create($sessionId, 'Keep this text');
-    $store->markFailed($workflow['id'], 'Translation failed. Please try again.');
-
+it('toggles debug log sections via the debug icon', function () {
     Livewire::test(TranslationWorkspace::class)
-        ->set('text', 'Keep this text')
-        ->set('workflowId', $workflow['id'])
-        ->set('status', 'synthesizing')
-        ->call('pollStatus')
-        ->assertSet('status', 'failed')
-        ->assertSet('error', 'Translation failed. Please try again.')
-        ->assertSet('text', 'Keep this text');
+        ->assertSet('showDebugLogs', false)
+        ->assertSee('aria-label="Debug controls"', false)
+        ->assertDontSee('Worker debug logs')
+        ->assertDontSee('Novita stream debug')
+        ->call('toggleDebugLogs')
+        ->assertSet('showDebugLogs', true)
+        ->assertSee('Worker debug logs')
+        ->assertSee('Novita stream debug')
+        ->call('toggleDebugLogs')
+        ->assertSet('showDebugLogs', false)
+        ->assertDontSee('Worker debug logs')
+        ->assertDontSee('Novita stream debug');
+});
+
+it('keeps composer empty after submit and surfaces failure in the thread', function () {
+    $visitorId = '66666666-6666-4666-8666-666666666666';
+    $store = app(TranslationWorkflowStore::class);
+    $turn = $store->create($visitorId, 'Keep this text');
+    $store->markFailed($turn['id'], 'Translation failed. Please try again.');
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->assertSee('Keep this text')
+        ->assertSee('Translation failed. Please try again.')
+        ->assertSet('text', '');
 });

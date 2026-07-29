@@ -4,7 +4,7 @@ Guidance for AI agents working in this repository.
 
 ## Project
 
-- **App:** Public English→Japanese translation page with Fish Audio TTS via Novita (queued workflow; see [README.md](README.md) for setup).
+- **App:** Public English→Japanese chat translation page with Fish Audio TTS via Novita (queued turns, anonymous history, FIFO autoplay; see [README.md](README.md) for setup).
 - **Stack:** Laravel 13, Livewire 4, Octane (FrankenPHP), Pest, Pint, Larastan (level 7)
 - **Layout:** Standard Laravel (not domain-driven). Keep new code in the standard folders.
 - **Package manager (JS):** Use **bun** only. Never use npm or nodejs.

@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\AnonymousVisitor;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -19,17 +20,17 @@ beforeEach(function () {
     URL::forceRootUrl('http://localhost');
 });
 
-it('denies publicStatus to a different session', function () {
+it('denies publicStatus to a different visitor', function () {
     $store = app(TranslationWorkflowStore::class);
-    $workflow = $store->create('owner-session', 'Hello');
+    $workflow = $store->create('owner-visitor', 'Hello');
 
-    expect(fn () => $store->publicStatus($workflow['id'], 'other-session'))
+    expect(fn () => $store->publicStatus($workflow['id'], 'other-visitor'))
         ->toThrow(AccessDeniedHttpException::class);
 });
 
 it('denies unsigned audio requests', function () {
     $store = app(TranslationWorkflowStore::class);
-    $workflow = $store->create('owner-session', 'Hello');
+    $workflow = $store->create('owner-visitor', 'Hello');
     $store->setTranslation($workflow['id'], '翻訳');
     $store->storeAudio($workflow['id'], fakeWavBytes());
     $store->markCompleted($workflow['id']);
@@ -38,9 +39,9 @@ it('denies unsigned audio requests', function () {
         ->assertForbidden();
 });
 
-it('denies signed audio requests from a non-owning session', function () {
+it('denies signed audio requests from a non-owning visitor', function () {
     $store = app(TranslationWorkflowStore::class);
-    $workflow = $store->create('owner-session', 'Hello');
+    $workflow = $store->create('owner-visitor', 'Hello');
     $store->setTranslation($workflow['id'], '翻訳');
     $store->storeAudio($workflow['id'], fakeWavBytes());
     $store->markCompleted($workflow['id']);
@@ -48,15 +49,16 @@ it('denies signed audio requests from a non-owning session', function () {
     $url = $store->signedAudioUrl($workflow['id']);
     expect($url)->not->toBeNull();
 
-    $this->get(signedAudioRequestPath($url))->assertForbidden();
+    $this->withUnencryptedCookie(AnonymousVisitor::COOKIE_NAME, 'other-visitor')
+        ->get(signedAudioRequestPath($url))
+        ->assertForbidden();
 });
 
-it('streams WAV audio for the owning session with a valid signed URL', function () {
-    $this->startSession();
-    $sessionId = session()->getId();
+it('streams WAV audio for the owning visitor with a valid signed URL', function () {
+    $visitorId = '11111111-1111-4111-8111-111111111111';
 
     $store = app(TranslationWorkflowStore::class);
-    $workflow = $store->create($sessionId, 'Hello');
+    $workflow = $store->create($visitorId, 'Hello');
     $store->setTranslation($workflow['id'], '翻訳');
     $store->storeAudio($workflow['id'], fakeWavBytes());
     $store->markCompleted($workflow['id']);
@@ -64,18 +66,19 @@ it('streams WAV audio for the owning session with a valid signed URL', function 
     $url = $store->signedAudioUrl($workflow['id']);
     expect($url)->not->toBeNull();
 
-    $this->withCookie(config('session.cookie'), $sessionId)
+    $this->withUnencryptedCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
         ->get(signedAudioRequestPath($url))
         ->assertOk()
         ->assertHeader('Content-Type', 'audio/wav');
 });
 
-it('denies audio access for an expired workflow', function () {
-    $this->startSession();
-    $sessionId = session()->getId();
+it('denies audio access for an expired turn', function () {
+    $visitorId = '22222222-2222-4222-8222-222222222222';
+
+    configureNovitaForTests(['signed_url_minutes' => 60, 'retention_days' => 30]);
 
     $store = app(TranslationWorkflowStore::class);
-    $workflow = $store->create($sessionId, 'Hello');
+    $workflow = $store->create($visitorId, 'Hello');
     $store->setTranslation($workflow['id'], '翻訳');
     $store->storeAudio($workflow['id'], fakeWavBytes());
     $store->markCompleted($workflow['id']);
@@ -85,7 +88,7 @@ it('denies audio access for an expired workflow', function () {
 
     $this->travel(61)->minutes();
 
-    $response = $this->withCookie(config('session.cookie'), $sessionId)
+    $response = $this->withUnencryptedCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
         ->get(signedAudioRequestPath($url));
 
     expect($response->status())->toBeIn([403, 404]);

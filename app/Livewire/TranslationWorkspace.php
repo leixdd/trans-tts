@@ -4,14 +4,13 @@ namespace App\Livewire;
 
 use App\Actions\StartTranslationWorkflow;
 use App\Http\Requests\StartTranslationRequest;
+use App\Services\AnonymousVisitor;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
-use Throwable;
 
 #[Layout('layouts::app')]
 #[Title('Translate & Speak')]
@@ -19,98 +18,113 @@ class TranslationWorkspace extends Component
 {
     public string $text = '';
 
-    public ?string $workflowId = null;
+    public bool $showDebugLogs = false;
 
-    public ?string $status = null;
+    public ?string $debugTurnId = null;
 
-    public ?string $translation = null;
-
-    public ?string $streamDebug = null;
-
-    public ?string $workerLogs = null;
-
-    public ?string $audioUrl = null;
-
-    public ?string $error = null;
+    /**
+     * @var list<array{
+     *     id: string,
+     *     status: string,
+     *     source_text: string,
+     *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
+     *     audio_url: string|null,
+     *     error: string|null,
+     *     created_at: string
+     * }>
+     */
+    public array $turns = [];
 
     /**
      * @var list<string>
      */
     private const IN_FLIGHT_STATUSES = ['queued', 'translating', 'synthesizing'];
 
-    #[Computed]
-    public function isInFlight(): bool
+    public function mount(AnonymousVisitor $visitors, TranslationWorkflowStore $store): void
     {
-        return in_array($this->status, self::IN_FLIGHT_STATUSES, true);
+        $visitorId = $visitors->idFrom(request());
+        $this->refreshTurns($store, $visitorId);
+    }
+
+    public function toggleDebugLogs(): void
+    {
+        $this->showDebugLogs = ! $this->showDebugLogs;
+    }
+
+    public function selectDebugTurn(string $turnId): void
+    {
+        $this->debugTurnId = $turnId;
+        $this->showDebugLogs = true;
     }
 
     #[Computed]
-    public function latestWorkerLog(): ?string
+    public function hasInFlightTurns(): bool
     {
-        if ($this->workerLogs === null || trim($this->workerLogs) === '') {
-            return null;
+        foreach ($this->turns as $turn) {
+            if (in_array($turn['status'], self::IN_FLIGHT_STATUSES, true)) {
+                return true;
+            }
         }
 
-        $lines = preg_split("/\r\n|\n|\r/", trim($this->workerLogs)) ?: [];
-        $last = $lines === [] ? null : $lines[array_key_last($lines)];
-
-        return filled($last) ? $last : null;
+        return false;
     }
 
-    public function submit(StartTranslationWorkflow $start, TranslationWorkflowStore $store): void
+    /**
+     * @return array{
+     *     id: string,
+     *     status: string,
+     *     source_text: string,
+     *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
+     *     audio_url: string|null,
+     *     error: string|null,
+     *     created_at: string
+     * }|null
+     */
+    #[Computed]
+    public function debugTurn(): ?array
     {
-        if ($this->isInFlight()) {
-            return;
+        if ($this->debugTurnId === null) {
+            return $this->turns === [] ? null : $this->turns[array_key_last($this->turns)];
         }
 
+        foreach ($this->turns as $turn) {
+            if ($turn['id'] === $this->debugTurnId) {
+                return $turn;
+            }
+        }
+
+        return $this->turns === [] ? null : $this->turns[array_key_last($this->turns)];
+    }
+
+    public function submit(
+        StartTranslationWorkflow $start,
+        TranslationWorkflowStore $store,
+        AnonymousVisitor $visitors,
+    ): void {
         $this->validate([
             'text' => StartTranslationRequest::textRules(),
         ]);
 
-        $this->clearResultState();
+        $visitorId = $visitors->idFrom(request());
+        $source = $this->text;
+        $started = $start($visitorId, $source);
 
-        $started = $start(session()->getId(), $this->text);
-
-        $this->workflowId = $started['id'];
-        $this->status = $started['status'];
-
-        try {
-            $payload = $store->publicStatus($this->workflowId, session()->getId());
-            $this->workerLogs = $payload['worker_logs'];
-            $this->streamDebug = $payload['stream_debug'];
-        } catch (Throwable) {
-            // Polling will refresh debug state shortly.
-        }
+        $this->text = '';
+        $this->debugTurnId = $started['id'];
+        $this->refreshTurns($store, $visitorId);
     }
 
-    public function pollStatus(TranslationWorkflowStore $store): void
+    public function pollStatus(TranslationWorkflowStore $store, AnonymousVisitor $visitors): void
     {
-        if ($this->workflowId === null || ! $this->isInFlight()) {
+        if (! $this->hasInFlightTurns()) {
             return;
         }
 
-        try {
-            $payload = $store->publicStatus($this->workflowId, session()->getId());
-        } catch (HttpExceptionInterface) {
-            $this->status = 'failed';
-            $this->error = 'This translation is no longer available. Please try again.';
-            $this->audioUrl = null;
-
-            return;
-        } catch (Throwable) {
-            $this->status = 'failed';
-            $this->error = 'Unable to check translation progress. Please try again.';
-            $this->audioUrl = null;
-
-            return;
-        }
-
-        $this->status = $payload['status'];
-        $this->translation = $payload['translation'];
-        $this->streamDebug = $payload['stream_debug'];
-        $this->workerLogs = $payload['worker_logs'];
-        $this->audioUrl = $payload['audio_url'];
-        $this->error = $payload['error'];
+        $this->refreshTurns($store, $visitors->idFrom(request()));
     }
 
     public function render(): View
@@ -118,14 +132,38 @@ class TranslationWorkspace extends Component
         return view('livewire.translation-workspace');
     }
 
-    private function clearResultState(): void
+    private function refreshTurns(TranslationWorkflowStore $store, string $visitorId): void
     {
-        $this->workflowId = null;
-        $this->status = null;
-        $this->translation = null;
-        $this->streamDebug = null;
-        $this->workerLogs = null;
-        $this->audioUrl = null;
-        $this->error = null;
+        $previous = [];
+        foreach ($this->turns as $turn) {
+            $previous[$turn['id']] = $turn['status'];
+        }
+
+        $this->turns = $store->listForVisitor($visitorId);
+
+        $order = array_map(static fn (array $turn): string => $turn['id'], $this->turns);
+        $this->dispatch('translation-playback-sync', order: $order);
+
+        foreach ($this->turns as $turn) {
+            $prior = $previous[$turn['id']] ?? null;
+
+            // Only notify the FIFO player for in-session transitions, never restored history.
+            if ($prior === null) {
+                continue;
+            }
+
+            if ($turn['status'] === 'failed' && $prior !== 'failed') {
+                $this->dispatch('translation-playback-failed', id: $turn['id']);
+            }
+
+            if (
+                $turn['status'] === 'completed'
+                && is_string($turn['audio_url'])
+                && $turn['audio_url'] !== ''
+                && $prior !== 'completed'
+            ) {
+                $this->dispatch('translation-audio-ready', id: $turn['id'], url: $turn['audio_url']);
+            }
+        }
     }
 }
