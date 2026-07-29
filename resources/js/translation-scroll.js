@@ -2,6 +2,7 @@
  * Chat thread auto-scroll.
  *
  * Presentation contract (Blade hooks):
+ * - [data-translation-chat]   — fixed-height chat card (CSS in app.css)
  * - [data-translation-scroll] — overflow scroll container for the chat thread
  * - [data-turn-id]            — turn articles inside the scroll container (newest last)
  *
