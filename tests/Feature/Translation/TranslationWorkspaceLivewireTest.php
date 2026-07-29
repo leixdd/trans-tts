@@ -122,6 +122,12 @@ it('exposes SSE stream URLs for in-flight turns and keeps fallback polling', fun
         ->assertSee('wire:poll.5s="pollStatus"', false);
 });
 
+it('exposes a stable data hook on the chat scroll container', function () {
+    Livewire::test(TranslationWorkspace::class)
+        ->assertSee('data-translation-scroll', false)
+        ->assertSee('data-translation-workspace', false);
+});
+
 it('restores visitor history after remount', function () {
     $visitorId = '44444444-4444-4444-8444-444444444444';
     $store = app(TranslationWorkflowStore::class);

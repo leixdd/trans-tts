@@ -16,6 +16,7 @@ import {
     reset,
     bindUi,
 } from './translation-playback.js';
+import { reconcileScroll } from './translation-scroll.js';
 import { reconcileTyping, revealTranslation } from './translation-typing.js';
 
 const streams = {
@@ -196,6 +197,7 @@ function reconcileUi() {
     reconcileStreams();
     reconcilePlaybackUi();
     reconcileTyping();
+    reconcileScroll();
 }
 
 document.addEventListener('livewire:init', () => {
