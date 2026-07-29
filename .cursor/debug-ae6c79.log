@@ -1,0 +1,2 @@
+{"sessionId":"ae6c79","runId":"post-fix-2","hypothesisId":"F","location":"translation-workspace.blade.php:enter-handler","message":"alpine shift-enter newline path","data":{"shiftKey":true,"defaultPrevented":false,"textLen":30},"timestamp":1785341575135}
+{"sessionId":"ae6c79","runId":"post-fix-2","hypothesisId":"F","location":"translation-workspace.blade.php:enter-handler","message":"alpine enter submit path","data":{"shiftKey":false,"defaultPrevented":true,"textLen":41},"timestamp":1785341579069}
