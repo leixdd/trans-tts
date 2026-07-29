@@ -25,6 +25,46 @@ it('shows validation errors for oversized submit', function () {
         ->assertHasErrors(['text' => 'max']);
 });
 
+it('defaults the target language to Japanese and persists a new selection in session', function () {
+    Livewire::test(TranslationWorkspace::class)
+        ->assertSet('targetLanguage', 'ja')
+        ->set('targetLanguage', 'zh')
+        ->assertSet('targetLanguage', 'zh');
+
+    expect(session('translation_target_language'))->toBe('zh');
+
+    Livewire::test(TranslationWorkspace::class)
+        ->assertSet('targetLanguage', 'zh');
+});
+
+it('rejects unsupported target languages on submit', function () {
+    Livewire::test(TranslationWorkspace::class)
+        ->set('text', 'Hello')
+        ->set('targetLanguage', 'xx')
+        ->call('submit')
+        ->assertHasErrors(['targetLanguage']);
+});
+
+it('stores the selected target language on each submitted turn and shows it in the bubble', function () {
+    Queue::fake();
+
+    $visitorId = '22222222-2222-4222-8222-222222222222';
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->set('targetLanguage', 'en')
+        ->set('text', 'Bonjour')
+        ->call('submit')
+        ->assertSee('English')
+        ->assertSee('data-turn-target-language="en"', false);
+
+    $turns = app(TranslationWorkflowStore::class)->listForVisitor($visitorId);
+
+    expect($turns)->toHaveCount(1)
+        ->and($turns[0]['target_language'])->toBe('en')
+        ->and($turns[0]['target_language_label'])->toBe('English');
+});
+
 it('allows another submit while a turn is still in flight', function () {
     Queue::fake();
 
@@ -96,6 +136,8 @@ it('polls in-flight turns to completed state and dispatches FIFO audio events', 
             'id' => $turn['id'],
             'status' => 'synthesizing',
             'source_text' => 'Hello',
+            'target_language' => 'ja',
+            'target_language_label' => 'Japanese',
             'translation' => null,
             'stream_debug' => null,
             'worker_logs' => null,

@@ -65,6 +65,7 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
                 $store->markStatus($this->workflowId, 'translating');
                 $translation = $translator->translate(
                     $workflow['source_text'],
+                    $workflow['target_language'],
                     function (string $delta, string $accumulated, string $rawSseData) use ($store): void {
                         $store->appendStreamDebug($this->workflowId, $accumulated, $rawSseData);
                     },
@@ -89,8 +90,8 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
             if (blank($fresh['audio_path'])) {
                 $store->appendWorkerLog($this->workflowId, 'Starting Fish Audio speech synthesis…');
                 $store->markStatus($this->workflowId, 'synthesizing');
-                // Always synthesize the Japanese translation — never the English source.
-                $audio = $speech->synthesize($translation);
+                // Always synthesize the translated text — never the source text.
+                $audio = $speech->synthesize($translation, $fresh['target_language']);
                 $store->storeAudio($this->workflowId, $audio);
                 $store->appendWorkerLog(
                     $this->workflowId,

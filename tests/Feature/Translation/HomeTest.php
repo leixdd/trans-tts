@@ -7,5 +7,7 @@ it('shows the translator Livewire page on home', function () {
         ->assertOk()
         ->assertSeeLivewire(TranslationWorkspace::class)
         ->assertSee('Translate & Speak')
-        ->assertSee('EN → JA');
+        ->assertSee('Any language → your target')
+        ->assertSee('id="target-language"', false)
+        ->assertSee('Japanese');
 });
