@@ -1,0 +1,38 @@
+---
+description: Core Laravel conventions for this Livewire starter (Laravel 13)
+alwaysApply: true
+---
+
+# Laravel Core
+
+This is a Laravel 13 + Livewire 4 blank starter (standard layout, not DDD). Enforce these on every change.
+
+## Architecture
+
+- Thin controllers/Livewire: HTTP I/O only; put logic in Actions, Services, or Jobs
+- No business logic in `routes/*.php`
+- Prefer Eloquent until complexity justifies a repository
+- Raw SQL / complex Query Builder: `app/Repositories/` only (interface + Eloquent impl)
+- Use Form Requests for non-trivial validation; `$request->validated()` + `$fillable`
+- Casts via `casts()` method (not `$casts` property)
+- Middleware / bootstrap: `bootstrap/app.php` (slim skeleton)
+
+## Style & Tooling
+
+- PSR-12 via Pint (`composer lint` / `composer lint:check`)
+- PHPStan/Larastan level 7 (`composer types:check`)
+- Tests with Pest (`composer test` or `php artisan test`)
+- Frontend tooling: **bun** only — never npm/nodejs
+
+## Feedback When Reviewing
+
+| Level | When |
+|-------|------|
+| Critical | Security, data loss, broken behavior |
+| Suggestion | Performance, maintainability, convention |
+| Nice to have | Optional polish |
+
+## Version Notes
+
+- Laravel 11+ slim skeleton applies; do not recreate `Http/Kernel.php`
+- Livewire 4 components under `app/Livewire/`

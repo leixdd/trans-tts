@@ -1,0 +1,45 @@
+---
+description: Repository layer and SQL security standards
+globs: app/Repositories/**/*.php,app/**/*Repository*.php
+alwaysApply: false
+---
+
+# Repository & SQL
+
+Repositories are the **only** place for raw SQL and complex Query Builder logic.
+
+## Layout
+
+```
+app/Repositories/Contracts/BlogPostRepositoryInterface.php
+app/Repositories/Eloquent/EloquentBlogPostRepository.php
+```
+
+Bind interface → implementation in a ServiceProvider. Inject via constructor — never `new`.
+
+## When to use
+
+- Prefer Eloquent on the model for simple CRUD/scopes
+- Repository for complex joins, reports, aggregates, shared query logic, or raw SQL Eloquent cannot express cleanly
+- Comment briefly why raw SQL was required
+
+## SQL security (required)
+
+- Bind all dynamic values (`?`, `:name`, or Query Builder) — never concatenate
+- Whitelist dynamic identifiers (sort columns, tables) — never from raw user input
+- Explicit SELECT columns on list/report queries
+- Paginate or `limit()` unbounded lists
+- Wrap multi-write SQL in `DB::transaction()`
+
+```php
+// Good
+DB::select('SELECT id, title FROM blog_posts WHERE user_id = ?', [$userId]);
+
+$sort = in_array($sortBy, self::SORTABLE, true) ? $sortBy : 'published_at';
+```
+
+## Design
+
+- Typed params and return types on every method
+- No HTTP, mail, or cache inside repositories
+- Cover new query methods with tests

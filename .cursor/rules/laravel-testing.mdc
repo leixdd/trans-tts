@@ -1,0 +1,28 @@
+---
+description: Pest testing standards for Feature and Unit tests
+globs: tests/**/*.php
+alwaysApply: false
+---
+
+# Testing (Pest)
+
+- Feature tests cover happy path + primary failure/auth cases for changed behavior
+- Use factories (`Model::factory()`), not manual `Model::create([...])` attribute dumps
+- Use `RefreshDatabase` (or equivalent isolation) when touching the DB
+- HTTP tests assert status, JSON/structure, and authorization outcomes
+- Queue/job tests use `Queue::fake()` / `Bus::fake()` when relevant
+- Prefer asserting behavior (status, DB, events) over framework internals
+- Descriptions: `it('guest cannot view draft post')` — plain English
+- Mirror structure: `tests/Feature/...` for HTTP/Livewire; `tests/Unit/...` for Actions/Services/Repos
+
+```php
+it('stores a blog post', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('blog_posts.store'), [...])
+        ->assertRedirect();
+
+    $this->assertDatabaseHas('blog_posts', [...]);
+});
+```

@@ -1,0 +1,16 @@
+---
+description: Livewire 4 component conventions and safety
+globs: app/Livewire/**/*.php,resources/views/livewire/**/*.blade.php,resources/views/components/**/*.blade.php
+alwaysApply: false
+---
+
+# Livewire
+
+- Place components under `app/Livewire/` (feature subfolders OK)
+- Type public properties; never expose secrets or sensitive models as public state
+- Authorize inside actions (`$this->authorize()` / policies), not only in the view
+- Debounce/throttle expensive `wire:model` inputs
+- Do not duplicate Service/Action business logic inside components
+- No raw SQL or `DB::` in Livewire — call Service or repository via DI
+- Load relations in the component/class; never query Eloquent from Blade
+- Keep views presentation-only; avoid large `@php` blocks

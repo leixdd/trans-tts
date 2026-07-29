@@ -1,0 +1,38 @@
+---
+description: Laravel naming conventions for models, routes, repos, and related artifacts
+globs: app/**/*.php,routes/**/*.php,database/**/*.php,resources/views/**/*.blade.php,tests/**/*.php
+alwaysApply: false
+---
+
+# Laravel Naming
+
+| Element | Convention | Good |
+|---------|------------|------|
+| Model | singular PascalCase | `BlogPost` |
+| Controller | singular + `Controller` | `BlogPostController` |
+| Route URL | plural | `/blog-posts` |
+| Route name | snake_case + dots | `blog_posts.index` |
+| Table | plural snake_case | `blog_posts` |
+| Pivot | singular models, alpha | `article_user` |
+| Column / FK | snake_case / `{model}_id` | `user_id` |
+| Form Request | `{Action}{Model}Request` | `StoreBlogPostRequest` |
+| Policy / Factory / Seeder | `{Model}{Suffix}` | `BlogPostPolicy` |
+| Job | verb phrase | `SendWelcomeEmail` |
+| Event | past tense | `OrderPlaced` |
+| Service | `{Noun}Service` | `PaymentService` |
+| Repo interface | `{Model}RepositoryInterface` | `BlogPostRepositoryInterface` |
+| Repo impl | `Eloquent{Model}Repository` | `EloquentBlogPostRepository` |
+| Action | verb phrase | `CreateBlogPost` |
+| View | kebab-case | `show-filtered.blade.php` |
+| Methods / vars | camelCase, descriptive | `$activeUsers` |
+
+## Relationships
+
+- `hasOne` / `belongsTo` → singular (`author`)
+- `hasMany` / `belongsToMany` → plural (`comments`)
+
+## Quality
+
+- No `$data`, `$obj`, `$temp`; no type suffixes (`$userArray` → `$users`)
+- Resource controllers use `index|store|show|update|destroy`
+- Pest: `it('...')` / `test('...')` in plain English

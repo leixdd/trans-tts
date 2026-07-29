@@ -1,0 +1,45 @@
+---
+description: Standard Laravel folder layout and layer responsibilities
+globs: app/**/*.php,routes/**/*.php,tests/**/*.php
+alwaysApply: false
+---
+
+# Folder Structure (Standard Layout)
+
+```
+app/
+├── Actions/
+├── Http/Controllers/       # Api/ for API controllers
+├── Http/Requests/
+├── Http/Resources/
+├── Jobs/
+├── Livewire/
+├── Models/
+├── Policies/
+├── Repositories/
+│   ├── Contracts/
+│   └── Eloquent/
+├── Rules/
+└── Services/
+```
+
+Do not introduce `app/Domain/` unless the project explicitly migrates to DDD. Do not mix layouts.
+
+## Layer Rules
+
+| Layer | Does | Must NOT |
+|-------|------|----------|
+| Controller / Livewire | I/O, delegate | Business logic, raw SQL, validation rules |
+| Form Request | Validate / authorize input | DB writes, side effects |
+| Action | Single `__invoke` operation | Unrelated multi-ops |
+| Service | Coordinated business logic | HTTP, Blade, raw SQL |
+| Repository | Eloquent / QB / raw SQL | HTTP, mail, cache, business rules |
+| Model | Relations, scopes, casts | Mail, uploads, complex raw SQL |
+| Resource | API shaping | Queries |
+
+## Placement
+
+- API controllers → `Http/Controllers/Api/`
+- Feature tests → `tests/Feature/` mirroring the feature
+- Unit tests → `tests/Unit/` mirroring the class
+- Avoid generic `Helpers/` / `Utils/` dumps — use Action or Service

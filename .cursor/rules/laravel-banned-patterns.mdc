@@ -1,0 +1,44 @@
+---
+description: Banned Laravel patterns — security, architecture, and Eloquent smells
+globs: app/**/*.php,routes/**/*.php,resources/views/**/*.blade.php
+alwaysApply: false
+---
+
+# Banned Patterns
+
+## Critical — never ship
+
+- `$request->all()` into `create()`/`update()` without `$fillable` → use `validated()`
+- Unbound raw SQL / string-concatenated SQL / `DB::raw($userInput)`
+- Dynamic table/column/sort from user input without allow-list
+- Raw SQL / `DB::` outside `Repositories/`
+- `env()` outside config files → use `config()`
+- Missing authorization on mutating endpoints
+- Eloquent queries inside Blade
+- Hardcoded secrets
+- Non-idempotent queued jobs without uniqueness / retry guards
+
+## Suggestion — fix in new code
+
+- Business logic in `routes/*.php`
+- Inline `$request->validate()` for non-trivial rules → Form Request
+- `new SomeClass()` for injectable services → constructor DI
+- Fat controllers (queries, mail, file IO)
+- `Model::all()` / unpaginated list endpoints
+- Returning raw Eloquent models from API → API Resource
+- Slow IO (mail, HTTP, PDF) synchronously in HTTP handlers → Job
+- Plural controller names (`UsersController`)
+- kebab-case route names → `blog_posts.index`
+
+## Prefer Laravel idioms
+
+```php
+// Prefer
+session('cart'); $request->name; back(); $x?->id; ->latest();
+
+// Avoid
+Session::get('cart'); $request->input('name'); Redirect::back();
+is_null($x) ? null : $x->id; ->orderBy('created_at', 'desc');
+```
+
+Only flag **new** violations in a diff if the codebase already has consistent legacy debt.
