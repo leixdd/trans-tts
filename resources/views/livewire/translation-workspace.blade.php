@@ -98,9 +98,23 @@
                                 </p>
 
                                 <p
+                                    data-turn-writing
+                                    @class([
+                                        'translation-writing inline-flex min-h-5 items-center gap-2 text-stone-500',
+                                        'hidden' => filled($turn['translation']),
+                                    ])
+                                    aria-hidden="true"
+                                >
+                                    <span class="translation-writing-dots" aria-hidden="true">
+                                        <span></span><span></span><span></span>
+                                    </span>
+                                    <span class="translation-writing-caret" aria-hidden="true"></span>
+                                </p>
+
+                                <p
                                     data-turn-translation
                                     @class([
-                                        'whitespace-pre-wrap text-stone-900',
+                                        'translation-text whitespace-pre-wrap text-stone-900',
                                         'hidden' => blank($turn['translation']),
                                     ])
                                 >{{ $turn['translation'] }}</p>
@@ -109,7 +123,7 @@
                                     {{ $turn['error'] ?: 'Translation failed. Please try again.' }}
                                 </p>
                             @else
-                                <p class="whitespace-pre-wrap" data-turn-translation>{{ $turn['translation'] }}</p>
+                                <p class="translation-text whitespace-pre-wrap" data-turn-translation>{{ $turn['translation'] }}</p>
 
                                 @if ($turn['audio_url'])
                                     <div class="space-y-2">
@@ -172,6 +186,7 @@
             <textarea
                 id="source-text"
                 wire:model="text"
+                x-on:keydown.enter="if (! $event.shiftKey) { $event.preventDefault(); $wire.submit() }"
                 rows="3"
                 maxlength="10000"
                 class="w-full resize-y rounded-lg border border-stone-300 bg-white px-4 py-3 text-base text-stone-900 shadow-sm outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20"

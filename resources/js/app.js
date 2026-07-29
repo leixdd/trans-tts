@@ -16,6 +16,7 @@ import {
     reset,
     bindUi,
 } from './translation-playback.js';
+import { reconcileTyping, revealTranslation } from './translation-typing.js';
 
 const streams = {
     sources: new Map(),
@@ -68,12 +69,18 @@ function applySnapshot(turnId, snapshot) {
     }
 
     const translationNode = article.querySelector('[data-turn-translation]');
-    if (translationNode && translation !== '') {
-        translationNode.textContent = translation;
-        translationNode.classList.remove('hidden');
+    if (translationNode) {
+        if (translation !== '') {
+            revealTranslation(turnId, translationNode, translation);
+        } else if (status && ['queued', 'translating', 'synthesizing'].includes(status)) {
+            const writing = article.querySelector('[data-turn-writing]');
+            writing?.classList.remove('hidden');
+        }
     }
 
     if (status === 'failed') {
+        const writing = article.querySelector('[data-turn-writing]');
+        writing?.classList.add('hidden');
         const errorNode = article.querySelector('[data-turn-error]');
         if (errorNode) {
             errorNode.textContent = error || 'Translation failed. Please try again.';
@@ -185,6 +192,12 @@ function reconcilePlaybackUi() {
     refreshControls();
 }
 
+function reconcileUi() {
+    reconcileStreams();
+    reconcilePlaybackUi();
+    reconcileTyping();
+}
+
 document.addEventListener('livewire:init', () => {
     Livewire.on('translation-playback-sync', (payload) => {
         const order = Array.isArray(payload) ? payload[0]?.order ?? payload.order : payload?.order;
@@ -202,19 +215,16 @@ document.addEventListener('livewire:init', () => {
     });
 
     Livewire.hook('morph.updated', () => {
-        reconcileStreams();
-        reconcilePlaybackUi();
+        reconcileUi();
     });
 });
 
 document.addEventListener('livewire:navigated', () => {
-    reconcileStreams();
-    reconcilePlaybackUi();
+    reconcileUi();
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    reconcileStreams();
-    reconcilePlaybackUi();
+    reconcileUi();
 });
 
 bindUi();
