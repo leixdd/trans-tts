@@ -1,6 +1,6 @@
 # Translate & Speak (multi-target TTS)
 
-Public chat-style web app that accepts source text in any language, translates it to a chosen target via AIProvider (`google/gemma-4-31b-it`), and synthesizes speech with Fish Audio S2 Pro (WAV). v1 targets are Japanese (default), English, Chinese, and Korean (`config/translation_languages.php`). Each turn is queued in the background; the Livewire UI shows an ordered history, relays progressive translation over an application SSE feed (with low-frequency polling fallback), reveals translated text with a writing animation, and autoplays completed audio in submission order (FIFO).
+Public chat-style web app that accepts source text in any language, translates it to a chosen target via AIProvider (`google/gemma-4-31b-it`), and synthesizes speech with Fish Audio S2 Pro (WAV). v1 targets are Japanese (default), English, Chinese, Korean, and Cebuano (`config/translation_languages.php`). Each turn is queued in the background; the Livewire UI shows an ordered history, relays progressive translation over an application SSE feed (with low-frequency polling fallback), reveals translated text with a writing animation, and autoplays completed audio in submission order (FIFO).
 
 **Stack:** Laravel 13, Livewire 4, Laravel Octane (FrankenPHP), Bun + Vite + Tailwind CSS 4.
 

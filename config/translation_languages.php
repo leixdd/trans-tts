@@ -36,6 +36,12 @@ return [
             'fish_reference_id' => null,
         ],
 
+        'ceb' => [
+            'label' => 'Cebuano',
+            'translation_prompt' => 'You are a translator. Translate the user\'s text into Cebuano only. Return only the Cebuano translation text with no explanations, notes, labels, or quotation marks.',
+            'fish_reference_id' => null,
+        ],
+
     ],
 
 ];

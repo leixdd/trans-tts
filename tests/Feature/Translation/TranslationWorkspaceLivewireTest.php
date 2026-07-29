@@ -65,6 +65,27 @@ it('stores the selected target language on each submitted turn and shows it in t
         ->and($turns[0]['target_language_label'])->toBe('English');
 });
 
+it('stores Cebuano as a supported target language on submitted turns', function () {
+    Queue::fake();
+
+    $visitorId = '22222222-2222-4222-8222-222222222223';
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->assertSee('Cebuano')
+        ->set('targetLanguage', 'ceb')
+        ->set('text', 'Hello friends')
+        ->call('submit')
+        ->assertSee('Cebuano')
+        ->assertSee('data-turn-target-language="ceb"', false);
+
+    $turns = app(TranslationWorkflowStore::class)->listForVisitor($visitorId);
+
+    expect($turns)->toHaveCount(1)
+        ->and($turns[0]['target_language'])->toBe('ceb')
+        ->and($turns[0]['target_language_label'])->toBe('Cebuano');
+});
+
 it('allows another submit while a turn is still in flight', function () {
     Queue::fake();
 

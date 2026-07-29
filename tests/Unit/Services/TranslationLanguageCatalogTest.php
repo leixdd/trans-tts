@@ -6,11 +6,13 @@ it('lists the v1 allow-listed language codes with Japanese as default', function
     $catalog = app(TranslationLanguageCatalog::class);
 
     expect($catalog->defaultCode())->toBe('ja')
-        ->and($catalog->codes())->toBe(['ja', 'en', 'zh', 'ko'])
+        ->and($catalog->codes())->toBe(['ja', 'en', 'zh', 'ko', 'ceb'])
         ->and($catalog->label('zh'))->toBe('Chinese')
+        ->and($catalog->label('ceb'))->toBe('Cebuano')
         ->and($catalog->normalize(null))->toBe('ja')
         ->and($catalog->normalize('xx'))->toBe('ja')
         ->and($catalog->isSupported('en'))->toBeTrue()
+        ->and($catalog->isSupported('ceb'))->toBeTrue()
         ->and($catalog->isSupported('fr'))->toBeFalse();
 });
 
