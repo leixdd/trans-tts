@@ -52,13 +52,25 @@
                         data-turn-stream="{{ $turn['stream_url'] }}"
                     @endif
                 >
-                    <div class="flex justify-end">
+                    <div class="flex items-end justify-end gap-2">
                         <div class="max-w-[85%] rounded-2xl rounded-br-md bg-teal-800 px-4 py-3 text-sm leading-relaxed text-white whitespace-pre-wrap">
                             {{ $turn['source_text'] }}
                         </div>
+                        <div
+                            class="flex size-8 shrink-0 items-center justify-center rounded-full bg-teal-800 text-white"
+                            aria-hidden="true"
+                        >
+                            <x-lucide-icon name="user" class="size-4 shrink-0" />
+                        </div>
                     </div>
 
-                    <div class="flex justify-start">
+                    <div class="flex items-end justify-start gap-2">
+                        <div
+                            class="flex size-8 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-stone-100 text-stone-700"
+                            aria-hidden="true"
+                        >
+                            <x-lucide-icon name="languages" class="size-4 shrink-0" />
+                        </div>
                         <div class="max-w-[85%] space-y-3 rounded-2xl rounded-bl-md border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-relaxed text-stone-900">
                             <div class="flex items-center justify-between gap-3">
                                 <span
