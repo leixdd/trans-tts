@@ -1,6 +1,6 @@
 # English → Japanese Translation & TTS
 
-Public chat-style web app that accepts English messages, translates them to Japanese via AIProvider (`google/gemma-4-31b-it`), and synthesizes Japanese speech with Fish Audio S2 Pro (WAV). Each turn is queued in the background; the Livewire UI shows an ordered history, relays progressive translation over an application SSE feed (with low-frequency polling fallback), and autoplays completed audio in submission order (FIFO).
+Public chat-style web app that accepts English messages, translates them to Japanese via AIProvider (`google/gemma-4-31b-it`), and synthesizes Japanese speech with Fish Audio S2 Pro (WAV). Each turn is queued in the background; the Livewire UI shows an ordered history, relays progressive translation over an application SSE feed (with low-frequency polling fallback), reveals Japanese text with a writing animation, and autoplays completed audio in submission order (FIFO).
 
 **Stack:** Laravel 13, Livewire 4, Laravel Octane (FrankenPHP), Bun + Vite + Tailwind CSS 4.
 
@@ -95,9 +95,15 @@ Services:
 
 Shared volumes persist the SQLite database and private WAV files under `storage/app`.
 
-## Chat history and audio
+## Chat input and history
+
+In the source textarea, **Enter** submits Translate & Speak; **Shift+Enter** inserts a newline.
 
 Turns are stored in the `translation_turns` table and keyed by an anonymous encrypted `tts_visitor` cookie (not a user account). Each visitor keeps at most `AI_PROVIDER_HISTORY_LIMIT` turns for `AI_PROVIDER_RETENTION_DAYS`. Private WAV files live under `storage/app/private/translation-audio` and are streamed only through signed URLs for the owning visitor.
+
+While a turn is in flight, the assistant bubble shows a writing indicator. When Japanese text arrives (SSE snapshot or Livewire morph), it types in grapheme-by-grapheme (`resources/js/translation-typing.js`). History restored on first paint is shown instantly (no replay).
+
+## Audio playback
 
 Autoplay uses a browser FIFO queue ordered by submission time (`resources/js/translation-playback.js`). Parallel workers may finish later chats first; the browser buffers those clips until every earlier turn has finished playing or failed. Only one clip plays at a time.
 
@@ -134,7 +140,7 @@ composer test          # lint + PHPStan + Pest
 vendor/bin/pest        # feature tests only
 composer lint:check    # Pint dry-run
 composer types:check   # PHPStan (512M memory limit)
-bun test resources/js  # FIFO playback coordinator (Bun)
+bun test resources/js  # FIFO playback + typing reveal (Bun)
 bun run build          # production asset build
 ```
 
