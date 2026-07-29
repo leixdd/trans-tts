@@ -22,6 +22,7 @@ class TranslationWorkflowStore
      *     visitor_id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -32,16 +33,21 @@ class TranslationWorkflowStore
      *     expires_at: string
      * }
      */
-    public function create(string $visitorId, string $sourceText): array
+    public function create(string $visitorId, string $sourceText, ?string $targetLanguage = null): array
     {
         if ($visitorId === '') {
             throw new RuntimeException('A visitor id is required to create a translation turn.');
         }
 
+        /** @var TranslationLanguageCatalog $catalog */
+        $catalog = app(TranslationLanguageCatalog::class);
+        $language = $catalog->normalize($targetLanguage);
+
         $turn = TranslationTurn::query()->create([
             'visitor_id' => $visitorId,
             'status' => 'queued',
             'source_text' => $sourceText,
+            'target_language' => $language,
             'translation' => null,
             'stream_debug' => null,
             'worker_logs' => null,
@@ -61,6 +67,7 @@ class TranslationWorkflowStore
      *     visitor_id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -94,6 +101,7 @@ class TranslationWorkflowStore
      *     visitor_id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -243,6 +251,7 @@ class TranslationWorkflowStore
      *     visitor_id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -273,6 +282,8 @@ class TranslationWorkflowStore
      *     id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
+     *     target_language_label: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -321,6 +332,8 @@ class TranslationWorkflowStore
      *     id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
+     *     target_language_label: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -398,6 +411,7 @@ class TranslationWorkflowStore
      *     visitor_id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -411,6 +425,8 @@ class TranslationWorkflowStore
      *     id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
+     *     target_language_label: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -424,10 +440,16 @@ class TranslationWorkflowStore
     {
         $inFlight = in_array($workflow['status'], ['queued', 'translating', 'synthesizing'], true);
 
+        /** @var TranslationLanguageCatalog $catalog */
+        $catalog = app(TranslationLanguageCatalog::class);
+        $targetLanguage = $catalog->normalize($workflow['target_language']);
+
         return [
             'id' => $workflow['id'],
             'status' => $workflow['status'],
             'source_text' => $workflow['source_text'],
+            'target_language' => $targetLanguage,
+            'target_language_label' => $catalog->label($targetLanguage),
             'translation' => $workflow['translation'],
             'stream_debug' => $workflow['stream_debug'],
             'worker_logs' => $workflow['worker_logs'],
@@ -448,6 +470,7 @@ class TranslationWorkflowStore
      *     visitor_id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -460,11 +483,15 @@ class TranslationWorkflowStore
      */
     private function toArray(TranslationTurn $turn): array
     {
+        /** @var TranslationLanguageCatalog $catalog */
+        $catalog = app(TranslationLanguageCatalog::class);
+
         return [
             'id' => $turn->id,
             'visitor_id' => $turn->visitor_id,
             'status' => $turn->status,
             'source_text' => $turn->source_text,
+            'target_language' => $catalog->normalize($turn->target_language ?? null),
             'translation' => $turn->translation,
             'stream_debug' => $turn->stream_debug,
             'worker_logs' => $turn->worker_logs,

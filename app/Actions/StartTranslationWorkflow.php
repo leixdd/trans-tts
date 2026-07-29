@@ -21,22 +21,25 @@ class StartTranslationWorkflow
      *
      * @throws ValidationException
      */
-    public function __invoke(string $visitorId, string $text): array
+    public function __invoke(string $visitorId, string $text, string $targetLanguage): array
     {
         $validated = Validator::make(
             [
                 'visitor_id' => $visitorId,
                 'text' => $text,
+                'target_language' => $targetLanguage,
             ],
             [
                 'visitor_id' => ['required', 'string'],
                 'text' => StartTranslationRequest::textRules(),
+                'target_language' => StartTranslationRequest::targetLanguageRules(),
             ],
         )->validate();
 
         $workflow = $this->store->create(
             $validated['visitor_id'],
             $validated['text'],
+            $validated['target_language'],
         );
 
         $this->store->appendWorkerLog(

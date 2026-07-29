@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Actions\StartTranslationWorkflow;
 use App\Http\Requests\StartTranslationRequest;
 use App\Services\AnonymousVisitor;
+use App\Services\TranslationLanguageCatalog;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Computed;
@@ -16,7 +17,11 @@ use Livewire\Component;
 #[Title('Translate & Speak')]
 class TranslationWorkspace extends Component
 {
+    private const SESSION_TARGET_LANGUAGE_KEY = 'translation_target_language';
+
     public string $text = '';
+
+    public string $targetLanguage = 'ja';
 
     public bool $showDebugLogs = false;
 
@@ -27,6 +32,8 @@ class TranslationWorkspace extends Component
      *     id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
+     *     target_language_label: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -43,10 +50,25 @@ class TranslationWorkspace extends Component
      */
     private const IN_FLIGHT_STATUSES = ['queued', 'translating', 'synthesizing'];
 
-    public function mount(AnonymousVisitor $visitors, TranslationWorkflowStore $store): void
-    {
+    public function mount(
+        AnonymousVisitor $visitors,
+        TranslationWorkflowStore $store,
+        TranslationLanguageCatalog $languages,
+    ): void {
+        $stored = session(self::SESSION_TARGET_LANGUAGE_KEY);
+        $this->targetLanguage = $languages->normalize(is_string($stored) ? $stored : null);
+
         $visitorId = $visitors->idFrom(request());
         $this->refreshTurns($store, $visitorId);
+    }
+
+    public function updatedTargetLanguage(TranslationLanguageCatalog $languages): void
+    {
+        if (! $languages->isSupported($this->targetLanguage)) {
+            return;
+        }
+
+        session([self::SESSION_TARGET_LANGUAGE_KEY => $this->targetLanguage]);
     }
 
     public function toggleDebugLogs(): void
@@ -58,6 +80,15 @@ class TranslationWorkspace extends Component
     {
         $this->debugTurnId = $turnId;
         $this->showDebugLogs = true;
+    }
+
+    /**
+     * @return list<array{code: string, label: string}>
+     */
+    #[Computed]
+    public function languageOptions(): array
+    {
+        return app(TranslationLanguageCatalog::class)->options();
     }
 
     #[Computed]
@@ -77,6 +108,8 @@ class TranslationWorkspace extends Component
      *     id: string,
      *     status: string,
      *     source_text: string,
+     *     target_language: string,
+     *     target_language_label: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -106,14 +139,18 @@ class TranslationWorkspace extends Component
         StartTranslationWorkflow $start,
         TranslationWorkflowStore $store,
         AnonymousVisitor $visitors,
+        TranslationLanguageCatalog $languages,
     ): void {
         $this->validate([
             'text' => StartTranslationRequest::textRules(),
+            'targetLanguage' => StartTranslationRequest::targetLanguageRules(),
         ]);
+
+        session([self::SESSION_TARGET_LANGUAGE_KEY => $this->targetLanguage]);
 
         $visitorId = $visitors->idFrom(request());
         $source = $this->text;
-        $started = $start($visitorId, $source);
+        $started = $start($visitorId, $source, $this->targetLanguage);
 
         $this->text = '';
         $this->debugTurnId = $started['id'];

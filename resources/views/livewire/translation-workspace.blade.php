@@ -6,13 +6,13 @@
     <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <p class="text-sm font-medium tracking-wide text-teal-800 uppercase">
-                EN → JA
+                Any language → your target
             </p>
             <h1 class="mt-1 text-3xl font-semibold tracking-tight text-stone-900 sm:text-4xl">
                 Translate &amp; Speak
             </h1>
             <p class="mt-2 max-w-xl text-stone-600">
-                Chat-style English to Japanese translation with speech playback history.
+                Chat-style translation with speech playback history. Choose a target language, then translate and speak.
             </p>
         </div>
     </header>
@@ -73,17 +73,25 @@
                         </div>
                         <div class="max-w-[85%] space-y-3 rounded-2xl rounded-bl-md border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-relaxed text-stone-900">
                             <div class="flex items-center justify-between gap-3">
-                                <span
-                                    data-turn-status="{{ $turn['status'] }}"
-                                    @class([
-                                        'rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-                                        'bg-amber-100 text-amber-900' => in_array($turn['status'], ['queued', 'translating', 'synthesizing'], true),
-                                        'bg-teal-100 text-teal-900' => $turn['status'] === 'completed',
-                                        'bg-red-100 text-red-800' => $turn['status'] === 'failed',
-                                    ])
-                                >
-                                    {{ $turn['status'] }}
-                                </span>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span
+                                        data-turn-status="{{ $turn['status'] }}"
+                                        @class([
+                                            'rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                                            'bg-amber-100 text-amber-900' => in_array($turn['status'], ['queued', 'translating', 'synthesizing'], true),
+                                            'bg-teal-100 text-teal-900' => $turn['status'] === 'completed',
+                                            'bg-red-100 text-red-800' => $turn['status'] === 'failed',
+                                        ])
+                                    >
+                                        {{ $turn['status'] }}
+                                    </span>
+                                    <span
+                                        data-turn-target-language="{{ $turn['target_language'] ?? 'ja' }}"
+                                        class="rounded-md border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-medium tracking-wide text-stone-700"
+                                    >
+                                        {{ $turn['target_language_label'] ?? strtoupper((string) ($turn['target_language'] ?? 'ja')) }}
+                                    </span>
+                                </div>
 
                                 <button
                                     type="button"
@@ -101,10 +109,10 @@
                                             Queued — waiting for a worker…
                                             @break
                                         @case('translating')
-                                            Translating English to Japanese…
+                                            Translating to {{ $turn['target_language_label'] ?? 'target language' }}…
                                             @break
                                         @case('synthesizing')
-                                            Synthesizing Japanese speech…
+                                            Synthesizing speech…
                                             @break
                                     @endswitch
                                 </p>
@@ -187,14 +195,14 @@
             @empty
                 <div class="flex h-64 items-center justify-center">
                     <p class="text-sm text-stone-500">
-                        Start the conversation by translating English below.
+                        Start the conversation by typing below and choosing a target language.
                     </p>
                 </div>
             @endforelse
         </div>
 
         <form wire:submit="submit" class="border-t border-stone-200 bg-white/90 p-4 sm:p-5">
-            <label for="source-text" class="sr-only">English source text</label>
+            <label for="source-text" class="sr-only">Source text to translate</label>
             <textarea
                 id="source-text"
                 wire:model="text"
@@ -202,26 +210,42 @@
                 rows="3"
                 maxlength="10000"
                 class="w-full resize-y rounded-lg border border-stone-300 bg-white px-4 py-3 text-base text-stone-900 shadow-sm outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20"
-                placeholder="Type English to translate…"
+                placeholder="Type text to translate…"
             ></textarea>
 
             <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <span class="text-sm text-stone-500">{{ mb_strlen($text) }} / 10000</span>
 
-                <button
-                    type="submit"
-                    wire:loading.attr="disabled"
-                    class="inline-flex items-center justify-center rounded-lg bg-teal-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800 disabled:cursor-not-allowed disabled:bg-stone-400"
-                >
-                    <span wire:loading.remove wire:target="submit" class="inline-flex items-center gap-2 whitespace-nowrap">
-                        <x-lucide-icon name="languages" class="size-4 shrink-0" aria-hidden="true" />
-                        Translate &amp; Speak
-                    </span>
-                    <span wire:loading wire:target="submit">Starting…</span>
-                </button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <label for="target-language" class="sr-only">Target language</label>
+                    <select
+                        id="target-language"
+                        wire:model.live="targetLanguage"
+                        class="rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm font-medium text-stone-800 shadow-sm outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20"
+                    >
+                        @foreach ($this->languageOptions as $option)
+                            <option value="{{ $option['code'] }}">{{ $option['label'] }}</option>
+                        @endforeach
+                    </select>
+
+                    <button
+                        type="submit"
+                        wire:loading.attr="disabled"
+                        class="inline-flex items-center justify-center rounded-lg bg-teal-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800 disabled:cursor-not-allowed disabled:bg-stone-400"
+                    >
+                        <span wire:loading.remove wire:target="submit" class="inline-flex items-center gap-2 whitespace-nowrap">
+                            <x-lucide-icon name="languages" class="size-4 shrink-0" aria-hidden="true" />
+                            Translate &amp; Speak
+                        </span>
+                        <span wire:loading wire:target="submit">Starting…</span>
+                    </button>
+                </div>
             </div>
 
             @error('text')
+                <p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>
+            @enderror
+            @error('targetLanguage')
                 <p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>
             @enderror
         </form>

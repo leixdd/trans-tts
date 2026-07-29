@@ -92,6 +92,45 @@ it('uses the configured Gemma translation model', function () {
     });
 });
 
+it('uses the Korean system prompt and still synthesizes speech for non-Japanese targets', function () {
+    fakeAIProviders('안녕하세요');
+
+    $store = app(TranslationWorkflowStore::class);
+    $workflow = $store->create('session-a', 'Hello world', 'ko');
+
+    (new TranslateAndSynthesizeSpeech($workflow['id']))->handle(
+        $store,
+        app(AIProviderTranslationService::class),
+        app(AIProviderSpeechService::class),
+    );
+
+    $completed = $store->find($workflow['id']);
+
+    expect($completed['status'])->toBe('completed')
+        ->and($completed['target_language'])->toBe('ko')
+        ->and($completed['translation'])->toBe('안녕하세요')
+        ->and($completed['audio_path'])->not->toBeNull();
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'chat/completions')) {
+            return false;
+        }
+
+        $messages = $request->data()['messages'] ?? [];
+        $system = $messages[0]['content'] ?? '';
+
+        return is_string($system) && str_contains($system, 'Korean');
+    });
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'fish-audio-s2-pro-text-to-speech')) {
+            return false;
+        }
+
+        return ($request->data()['text'] ?? null) === '안녕하세요';
+    });
+});
+
 it('marks the workflow failed with a safe message when translation HTTP fails', function () {
     Http::fake([
         'https://api.aiprovider.test/openai/v1/chat/completions' => Http::response('error', 502),

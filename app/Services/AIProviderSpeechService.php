@@ -5,26 +5,34 @@ namespace App\Services;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 class AIProviderSpeechService
 {
+    public function __construct(
+        private readonly TranslationLanguageCatalog $languages,
+    ) {}
+
     /**
-     * Synthesize Japanese text to WAV bytes via AIProvider Fish Audio S2 Pro.
+     * Synthesize translated text to WAV bytes via AIProvider Fish Audio S2 Pro.
      *
      * Stateless and Octane-safe: no request-specific mutable properties.
      *
      * @throws RuntimeException
      */
-    public function synthesize(string $japaneseText): string
+    public function synthesize(string $text, string $targetLanguage): string
     {
+        $language = $this->languages->normalize($targetLanguage);
+
         $apiKey = config('services.ai_provider.api_key');
         if (! is_string($apiKey) || $apiKey === '') {
             throw new RuntimeException('AIProvider API key is not configured.');
         }
 
-        $referenceId = config('services.ai_provider.fish_reference_id');
-        if (! is_string($referenceId) || $referenceId === '') {
-            throw new RuntimeException('AIProvider Fish Audio reference_id is not configured.');
+        try {
+            $referenceId = $this->languages->fishReferenceId($language);
+        } catch (Throwable $exception) {
+            throw new RuntimeException($exception->getMessage(), 0, $exception);
         }
 
         $endpoint = (string) config('services.ai_provider.tts_endpoint');
@@ -35,7 +43,7 @@ class AIProviderSpeechService
             throw new RuntimeException('AIProvider TTS endpoint is not configured.');
         }
 
-        if (trim($japaneseText) === '') {
+        if (trim($text) === '') {
             throw new RuntimeException('Cannot synthesize empty translation text.');
         }
 
@@ -49,7 +57,7 @@ class AIProviderSpeechService
                 ->asJson()
                 ->timeout($timeout)
                 ->post($endpoint, [
-                    'text' => $japaneseText,
+                    'text' => $text,
                     'format' => 'wav',
                     'reference_id' => $referenceId,
                 ]);

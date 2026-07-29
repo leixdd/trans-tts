@@ -10,10 +10,12 @@ use Throwable;
 
 class AIProviderTranslationService
 {
-    private const SYSTEM_PROMPT = 'You are a translator. Translate the user\'s English text into Japanese only. Return only the Japanese translation text with no explanations, notes, labels, or quotation marks.';
+    public function __construct(
+        private readonly TranslationLanguageCatalog $languages,
+    ) {}
 
     /**
-     * Translate English source text to Japanese via AIProvider streaming chat completions.
+     * Translate source text into the allow-listed target language via AIProvider streaming chat.
      *
      * Stateless and Octane-safe: no request-specific mutable properties.
      *
@@ -21,8 +23,16 @@ class AIProviderTranslationService
      *
      * @throws RuntimeException
      */
-    public function translate(string $englishText, ?callable $onChunk = null): string
+    public function translate(string $sourceText, string $targetLanguage, ?callable $onChunk = null): string
     {
+        $language = $this->languages->normalize($targetLanguage);
+
+        try {
+            $systemPrompt = $this->languages->translationPrompt($language);
+        } catch (Throwable $exception) {
+            throw new RuntimeException($exception->getMessage(), 0, $exception);
+        }
+
         $apiKey = config('services.ai_provider.api_key');
         if (! is_string($apiKey) || $apiKey === '') {
             throw new RuntimeException('AIProvider API key is not configured.');
@@ -51,11 +61,11 @@ class AIProviderTranslationService
                     'messages' => [
                         [
                             'role' => 'system',
-                            'content' => self::SYSTEM_PROMPT,
+                            'content' => $systemPrompt,
                         ],
                         [
                             'role' => 'user',
-                            'content' => $englishText,
+                            'content' => $sourceText,
                         ],
                     ],
                     'temperature' => 0.2,

@@ -61,9 +61,9 @@ function applySnapshot(turnId, snapshot) {
             if (status === 'queued') {
                 label.textContent = 'Queued — waiting for a worker…';
             } else if (status === 'translating') {
-                label.textContent = 'Translating English to Japanese…';
+                label.textContent = 'Translating…';
             } else if (status === 'synthesizing') {
-                label.textContent = 'Synthesizing Japanese speech…';
+                label.textContent = 'Synthesizing speech…';
             }
         }
     }

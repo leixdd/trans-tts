@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
  * @property string $visitor_id
  * @property string $status
  * @property string $source_text
+ * @property string $target_language
  * @property string|null $translation
  * @property string|null $stream_debug
  * @property string|null $worker_logs
@@ -31,6 +32,7 @@ class TranslationTurn extends Model
         'visitor_id',
         'status',
         'source_text',
+        'target_language',
         'translation',
         'stream_debug',
         'worker_logs',
