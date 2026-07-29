@@ -39,7 +39,17 @@ class StartTranslationWorkflow
             $validated['text'],
         );
 
+        $this->store->appendWorkerLog(
+            $workflow['id'],
+            'Workflow created (status=queued)',
+        );
+
         TranslateAndSynthesizeSpeech::dispatch($workflow['id']);
+
+        $this->store->appendWorkerLog(
+            $workflow['id'],
+            'Job dispatched to queue — waiting for a worker (run `php artisan queue:work` or the Compose queue service)',
+        );
 
         return [
             'id' => $workflow['id'],

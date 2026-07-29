@@ -103,6 +103,11 @@
                                 @break
                         @endswitch
                     </p>
+                    @if ($this->latestWorkerLog)
+                        <p class="max-w-full font-mono text-xs leading-relaxed text-stone-500">
+                            {{ $this->latestWorkerLog }}
+                        </p>
+                    @endif
                 </div>
             @elseif ($status === 'failed')
                 <div class="flex flex-1 flex-col justify-center gap-3" role="alert">
@@ -133,6 +138,42 @@
                     </p>
                 </div>
             @endif
+        </section>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-2">
+        <section
+            class="rounded-xl border border-dashed border-stone-300 bg-stone-50/80 p-4 sm:p-5"
+            aria-labelledby="worker-debug-heading"
+        >
+            <div class="flex items-center justify-between gap-3">
+                <h2 id="worker-debug-heading" class="text-sm font-semibold tracking-wide text-stone-800 uppercase">
+                    Worker debug logs
+                </h2>
+                @if ($workerLogs)
+                    <span class="text-xs text-stone-600">Queue / job</span>
+                @endif
+            </div>
+            <pre
+                class="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-stone-200 bg-white px-3 py-2 font-mono text-xs leading-relaxed text-stone-800"
+            >@if ($workerLogs){{ $workerLogs }}@elseif ($this->isInFlight)Waiting for worker activity…@elseWorker logs will appear here after you submit.@endif</pre>
+        </section>
+
+        <section
+            class="rounded-xl border border-dashed border-amber-300 bg-amber-50/70 p-4 sm:p-5"
+            aria-labelledby="stream-debug-heading"
+        >
+            <div class="flex items-center justify-between gap-3">
+                <h2 id="stream-debug-heading" class="text-sm font-semibold tracking-wide text-amber-950 uppercase">
+                    Novita stream debug
+                </h2>
+                @if ($streamDebug)
+                    <span class="text-xs text-amber-800">SSE chunks</span>
+                @endif
+            </div>
+            <pre
+                class="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-amber-200 bg-white px-3 py-2 font-mono text-xs leading-relaxed text-stone-800"
+            >@if ($streamDebug){{ $streamDebug }}@elseif ($this->isInFlight)Waiting for Novita stream chunks…@elseStream output will appear here after you submit.@endif</pre>
         </section>
     </div>
 </div>

@@ -37,5 +37,7 @@ it('returns queued status and dispatches the synthesis job on success', function
     $workflow = app(TranslationWorkflowStore::class)->find($result['id']);
     expect($workflow)->not->toBeNull()
         ->and($workflow['status'])->toBe('queued')
-        ->and($workflow['source_text'])->toBe('Hello world');
+        ->and($workflow['source_text'])->toBe('Hello world')
+        ->and($workflow['worker_logs'])->toContain('Workflow created')
+        ->and($workflow['worker_logs'])->toContain('Job dispatched to queue');
 });

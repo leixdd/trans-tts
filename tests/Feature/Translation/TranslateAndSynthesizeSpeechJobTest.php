@@ -28,17 +28,22 @@ it('completes the happy path with Japanese translation and stored WAV audio', fu
 
     expect($completed['status'])->toBe('completed')
         ->and($completed['translation'])->toBe('こんにちは世界')
+        ->and($completed['stream_debug'])->toContain('accumulated: こんにちは世界')
+        ->and($completed['worker_logs'])->toContain('Worker picked up job')
+        ->and($completed['worker_logs'])->toContain('Starting Novita translation')
+        ->and($completed['worker_logs'])->toContain('Starting Fish Audio speech synthesis')
+        ->and($completed['worker_logs'])->toContain('Workflow completed')
         ->and($completed['audio_path'])->not->toBeNull()
         ->and(Storage::disk('local')->exists($completed['audio_path']))->toBeTrue();
 });
 
 it('sends the Japanese translation to TTS not the English source text', function () {
     Http::fake([
-        'https://api.novita.test/openai/v1/chat/completions' => Http::response([
-            'choices' => [
-                ['message' => ['content' => '翻訳結果']],
-            ],
-        ]),
+        'https://api.novita.test/openai/v1/chat/completions' => Http::response(
+            fakeNovitaStreamBody('翻訳結果'),
+            200,
+            ['Content-Type' => 'text/event-stream'],
+        ),
         'https://api.novita.test/v3/fish-audio-s2-pro-text-to-speech' => Http::response(
             fakeWavBytes(),
             200,
@@ -82,7 +87,8 @@ it('uses the configured Gemma translation model', function () {
             return false;
         }
 
-        return ($request->data()['model'] ?? null) === 'google/gemma-4-31b-it';
+        return ($request->data()['model'] ?? null) === 'google/gemma-4-31b-it'
+            && ($request->data()['stream'] ?? null) === true;
     });
 });
 
@@ -100,14 +106,18 @@ it('marks the workflow failed with a safe message when translation HTTP fails', 
 
     expect($failed['status'])->toBe('failed')
         ->and($failed['error'])->toBe('Translation failed. Please try again.')
-        ->and($failed['error'])->not->toContain('test-api-key');
+        ->and($failed['error'])->not->toContain('test-api-key')
+        ->and($failed['worker_logs'])->toContain('Attempt failed')
+        ->and($failed['worker_logs'])->toContain('Job failed permanently');
 });
 
 it('marks the workflow failed when translation response is malformed', function () {
     Http::fake([
-        'https://api.novita.test/openai/v1/chat/completions' => Http::response([
-            'choices' => [],
-        ]),
+        'https://api.novita.test/openai/v1/chat/completions' => Http::response(
+            "data: {not-json}\n\ndata: [DONE]\n\n",
+            200,
+            ['Content-Type' => 'text/event-stream'],
+        ),
     ]);
 
     $store = app(TranslationWorkflowStore::class);
@@ -120,11 +130,11 @@ it('marks the workflow failed when translation response is malformed', function 
 
 it('marks the workflow failed when translation response is empty', function () {
     Http::fake([
-        'https://api.novita.test/openai/v1/chat/completions' => Http::response([
-            'choices' => [
-                ['message' => ['content' => '   ']],
-            ],
-        ]),
+        'https://api.novita.test/openai/v1/chat/completions' => Http::response(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"   \"}}]}\n\ndata: [DONE]\n\n",
+            200,
+            ['Content-Type' => 'text/event-stream'],
+        ),
     ]);
 
     $store = app(TranslationWorkflowStore::class);
@@ -137,11 +147,11 @@ it('marks the workflow failed when translation response is empty', function () {
 
 it('marks the workflow failed after translation when TTS fails but keeps the translation', function () {
     Http::fake([
-        'https://api.novita.test/openai/v1/chat/completions' => Http::response([
-            'choices' => [
-                ['message' => ['content' => '保存された翻訳']],
-            ],
-        ]),
+        'https://api.novita.test/openai/v1/chat/completions' => Http::response(
+            fakeNovitaStreamBody('保存された翻訳'),
+            200,
+            ['Content-Type' => 'text/event-stream'],
+        ),
         'https://api.novita.test/v3/fish-audio-s2-pro-text-to-speech' => Http::response('error', 500),
     ]);
 
@@ -216,11 +226,11 @@ it('fails clearly when the Fish reference id is missing', function () {
     configureNovitaForTests(['fish_reference_id' => '']);
 
     Http::fake([
-        'https://api.novita.test/openai/v1/chat/completions' => Http::response([
-            'choices' => [
-                ['message' => ['content' => '翻訳']],
-            ],
-        ]),
+        'https://api.novita.test/openai/v1/chat/completions' => Http::response(
+            fakeNovitaStreamBody('翻訳'),
+            200,
+            ['Content-Type' => 'text/event-stream'],
+        ),
     ]);
 
     $store = app(TranslationWorkflowStore::class);

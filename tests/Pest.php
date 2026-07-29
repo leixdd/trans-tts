@@ -28,14 +28,44 @@ function fakeWavBytes(): string
     return 'RIFF'.str_repeat("\0", 100);
 }
 
+function fakeNovitaStreamBody(string $translation): string
+{
+    $chunks = preg_split('//u', $translation, -1, PREG_SPLIT_NO_EMPTY);
+
+    if ($chunks === false || $chunks === []) {
+        $chunks = [$translation];
+    }
+
+    $events = [];
+
+    foreach (array_chunk($chunks, max(1, (int) ceil(count($chunks) / 3))) as $piece) {
+        $payload = json_encode([
+            'id' => 'chatcmpl-test',
+            'object' => 'chat.completion.chunk',
+            'choices' => [
+                [
+                    'index' => 0,
+                    'delta' => ['content' => implode('', $piece)],
+                ],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $events[] = 'data: '.$payload;
+    }
+
+    $events[] = 'data: [DONE]';
+
+    return implode("\n\n", $events)."\n\n";
+}
+
 function fakeNovitaProviders(string $translation = 'こんにちは'): void
 {
     Http::fake([
-        'https://api.novita.test/openai/v1/chat/completions' => Http::response([
-            'choices' => [
-                ['message' => ['content' => $translation]],
-            ],
-        ]),
+        'https://api.novita.test/openai/v1/chat/completions' => Http::response(
+            fakeNovitaStreamBody($translation),
+            200,
+            ['Content-Type' => 'text/event-stream'],
+        ),
         'https://api.novita.test/v3/fish-audio-s2-pro-text-to-speech' => Http::response(
             fakeWavBytes(),
             200,

@@ -38,18 +38,30 @@ it('updates status from pollStatus when the workflow completes', function () {
 
     $store = app(TranslationWorkflowStore::class);
     $workflow = $store->create($sessionId, 'Hello');
+    $store->appendStreamDebug(
+        $workflow['id'],
+        '翻訳完了',
+        '{"choices":[{"delta":{"content":"翻訳完了"}}]}',
+    );
     $store->setTranslation($workflow['id'], '翻訳完了');
     $store->storeAudio($workflow['id'], fakeWavBytes());
     $store->markCompleted($workflow['id']);
 
-    Livewire::test(TranslationWorkspace::class)
+    $store->appendWorkerLog($workflow['id'], 'Workflow completed');
+
+    $component = Livewire::test(TranslationWorkspace::class)
         ->set('text', 'Hello')
         ->set('workflowId', $workflow['id'])
         ->set('status', 'synthesizing')
         ->call('pollStatus')
         ->assertSet('status', 'completed')
         ->assertSet('translation', '翻訳完了')
+        ->assertSee('Worker debug logs')
+        ->assertSee('Novita stream debug')
         ->assertNotSet('audioUrl', null);
+
+    expect($component->get('streamDebug'))->toContain('accumulated: 翻訳完了')
+        ->and($component->get('workerLogs'))->toContain('Workflow completed');
 });
 
 it('retains English input and exposes failure state for retry', function () {

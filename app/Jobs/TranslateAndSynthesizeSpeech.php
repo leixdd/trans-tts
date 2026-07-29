@@ -43,16 +43,42 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
         }
 
         if (in_array($workflow['status'], ['completed', 'failed'], true)) {
+            $store->appendWorkerLog(
+                $this->workflowId,
+                'Skipped — workflow already '.$workflow['status'],
+            );
+
             return;
         }
+
+        $attempt = $this->attempts();
+        $store->appendWorkerLog(
+            $this->workflowId,
+            "Worker picked up job (attempt {$attempt}/{$this->tries})",
+        );
 
         try {
             $translation = $workflow['translation'];
 
             if ($translation === null || $translation === '') {
+                $store->appendWorkerLog($this->workflowId, 'Starting Novita translation…');
                 $store->markStatus($this->workflowId, 'translating');
-                $translation = $translator->translate($workflow['source_text']);
+                $translation = $translator->translate(
+                    $workflow['source_text'],
+                    function (string $delta, string $accumulated, string $rawSseData) use ($store): void {
+                        $store->appendStreamDebug($this->workflowId, $accumulated, $rawSseData);
+                    },
+                );
                 $store->setTranslation($this->workflowId, $translation);
+                $store->appendWorkerLog(
+                    $this->workflowId,
+                    'Translation complete ('.mb_strlen($translation).' chars)',
+                );
+            } else {
+                $store->appendWorkerLog(
+                    $this->workflowId,
+                    'Reusing stored translation ('.mb_strlen($translation).' chars)',
+                );
             }
 
             $fresh = $store->find($this->workflowId);
@@ -61,15 +87,29 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
             }
 
             if (blank($fresh['audio_path'])) {
+                $store->appendWorkerLog($this->workflowId, 'Starting Fish Audio speech synthesis…');
                 $store->markStatus($this->workflowId, 'synthesizing');
                 // Always synthesize the Japanese translation — never the English source.
                 $audio = $speech->synthesize($translation);
                 $store->storeAudio($this->workflowId, $audio);
+                $store->appendWorkerLog(
+                    $this->workflowId,
+                    'Audio stored ('.strlen($audio).' bytes)',
+                );
+            } else {
+                $store->appendWorkerLog($this->workflowId, 'Reusing stored audio');
             }
 
             $store->markCompleted($this->workflowId);
+            $store->appendWorkerLog($this->workflowId, 'Workflow completed');
         } catch (Throwable $exception) {
             // Do not mark failed here — retries must remain possible until tries are exhausted.
+            $store->appendWorkerLog(
+                $this->workflowId,
+                'Attempt failed: '.$this->safeExceptionSummary($exception)
+                    .' — will retry if attempts remain',
+            );
+
             Log::warning('Translation workflow attempt failed.', [
                 'workflow_id' => $this->workflowId,
                 'message' => $exception->getMessage(),
@@ -89,9 +129,16 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        $message = $this->userFacingMessage($exception);
+
+        $store->appendWorkerLog(
+            $this->workflowId,
+            'Job failed permanently: '.$message,
+        );
+
         $store->markFailed(
             $this->workflowId,
-            $this->userFacingMessage($exception),
+            $message,
         );
     }
 
@@ -108,5 +155,22 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
         }
 
         return 'Translation failed. Please try again.';
+    }
+
+    private function safeExceptionSummary(Throwable $exception): string
+    {
+        $message = $exception->getMessage();
+
+        if ($message === '') {
+            return $exception::class;
+        }
+
+        // Keep logs useful without dumping secrets or huge payloads.
+        $summary = preg_replace('/Bearer\s+\S+/i', 'Bearer [redacted]', $message) ?? $message;
+        $summary = preg_replace('/sk-[A-Za-z0-9_-]+/', '[redacted-key]', $summary) ?? $summary;
+
+        return mb_strlen($summary) > 200
+            ? mb_substr($summary, 0, 200).'…'
+            : $summary;
     }
 }

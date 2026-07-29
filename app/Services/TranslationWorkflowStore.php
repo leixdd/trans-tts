@@ -20,6 +20,8 @@ class TranslationWorkflowStore
 
     private const AUDIO_DIRECTORY = 'translation-audio';
 
+    private const WORKER_LOGS_MAX_BYTES = 16_000;
+
     /**
      * @return array{
      *     id: string,
@@ -27,6 +29,8 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
      *     audio_path: string|null,
      *     error: string|null,
      *     created_at: string,
@@ -50,6 +54,8 @@ class TranslationWorkflowStore
             'status' => 'queued',
             'source_text' => $sourceText,
             'translation' => null,
+            'stream_debug' => null,
+            'worker_logs' => null,
             'audio_path' => null,
             'error' => null,
             'created_at' => $now->toIso8601String(),
@@ -70,6 +76,8 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
      *     audio_path: string|null,
      *     error: string|null,
      *     created_at: string,
@@ -102,6 +110,8 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
      *     audio_path: string|null,
      *     error: string|null,
      *     created_at: string,
@@ -128,6 +138,40 @@ class TranslationWorkflowStore
     {
         $workflow = $this->require($id);
         $workflow['translation'] = $translation;
+        $workflow['updated_at'] = now()->toIso8601String();
+        $this->put($workflow);
+    }
+
+    /**
+     * Append a Novita SSE debug line and the accumulated streamed translation.
+     */
+    public function appendStreamDebug(string $id, string $accumulated, string $rawSseData): void
+    {
+        $workflow = $this->require($id);
+        $existing = $workflow['stream_debug'] ?? '';
+
+        $line = 'delta: '.$rawSseData."\n".'accumulated: '.$accumulated."\n---\n";
+        $workflow['stream_debug'] = $existing.$line;
+        $workflow['translation'] = $accumulated;
+        $workflow['updated_at'] = now()->toIso8601String();
+        $this->put($workflow);
+    }
+
+    /**
+     * Append a timestamped worker/debug log line for UI diagnostics.
+     */
+    public function appendWorkerLog(string $id, string $message): void
+    {
+        $workflow = $this->require($id);
+        $existing = $workflow['worker_logs'] ?? '';
+        $line = '['.now()->format('H:i:s').'] '.$message."\n";
+        $logs = $existing.$line;
+
+        if (strlen($logs) > self::WORKER_LOGS_MAX_BYTES) {
+            $logs = substr($logs, -self::WORKER_LOGS_MAX_BYTES);
+        }
+
+        $workflow['worker_logs'] = $logs;
         $workflow['updated_at'] = now()->toIso8601String();
         $this->put($workflow);
     }
@@ -237,6 +281,8 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
      *     audio_path: string|null,
      *     error: string|null,
      *     created_at: string,
@@ -264,6 +310,8 @@ class TranslationWorkflowStore
      *     id: string,
      *     status: string,
      *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
      *     audio_url: string|null,
      *     error: string|null
      * }
@@ -276,6 +324,8 @@ class TranslationWorkflowStore
             'id' => $workflow['id'],
             'status' => $workflow['status'],
             'translation' => $workflow['translation'],
+            'stream_debug' => $workflow['stream_debug'],
+            'worker_logs' => $workflow['worker_logs'],
             'audio_url' => $workflow['status'] === 'completed'
                 ? $this->signedAudioUrl($id)
                 : null,
@@ -304,6 +354,8 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
      *     audio_path: string|null,
      *     error: string|null,
      *     created_at: string,
@@ -329,6 +381,8 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
      *     audio_path: string|null,
      *     error: string|null,
      *     created_at: string,
@@ -410,6 +464,8 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     translation: string|null,
+     *     stream_debug: string|null,
+     *     worker_logs: string|null,
      *     audio_path: string|null,
      *     error: string|null,
      *     created_at: string,
@@ -426,6 +482,12 @@ class TranslationWorkflowStore
             'source_text' => (string) ($workflow['source_text'] ?? ''),
             'translation' => isset($workflow['translation']) && is_string($workflow['translation'])
                 ? $workflow['translation']
+                : null,
+            'stream_debug' => isset($workflow['stream_debug']) && is_string($workflow['stream_debug'])
+                ? $workflow['stream_debug']
+                : null,
+            'worker_logs' => isset($workflow['worker_logs']) && is_string($workflow['worker_logs'])
+                ? $workflow['worker_logs']
                 : null,
             'audio_path' => isset($workflow['audio_path']) && is_string($workflow['audio_path'])
                 ? $workflow['audio_path']

@@ -25,6 +25,10 @@ class TranslationWorkspace extends Component
 
     public ?string $translation = null;
 
+    public ?string $streamDebug = null;
+
+    public ?string $workerLogs = null;
+
     public ?string $audioUrl = null;
 
     public ?string $error = null;
@@ -40,7 +44,20 @@ class TranslationWorkspace extends Component
         return in_array($this->status, self::IN_FLIGHT_STATUSES, true);
     }
 
-    public function submit(StartTranslationWorkflow $start): void
+    #[Computed]
+    public function latestWorkerLog(): ?string
+    {
+        if ($this->workerLogs === null || trim($this->workerLogs) === '') {
+            return null;
+        }
+
+        $lines = preg_split("/\r\n|\n|\r/", trim($this->workerLogs)) ?: [];
+        $last = $lines === [] ? null : $lines[array_key_last($lines)];
+
+        return filled($last) ? $last : null;
+    }
+
+    public function submit(StartTranslationWorkflow $start, TranslationWorkflowStore $store): void
     {
         if ($this->isInFlight()) {
             return;
@@ -56,6 +73,14 @@ class TranslationWorkspace extends Component
 
         $this->workflowId = $started['id'];
         $this->status = $started['status'];
+
+        try {
+            $payload = $store->publicStatus($this->workflowId, session()->getId());
+            $this->workerLogs = $payload['worker_logs'];
+            $this->streamDebug = $payload['stream_debug'];
+        } catch (Throwable) {
+            // Polling will refresh debug state shortly.
+        }
     }
 
     public function pollStatus(TranslationWorkflowStore $store): void
@@ -82,6 +107,8 @@ class TranslationWorkspace extends Component
 
         $this->status = $payload['status'];
         $this->translation = $payload['translation'];
+        $this->streamDebug = $payload['stream_debug'];
+        $this->workerLogs = $payload['worker_logs'];
         $this->audioUrl = $payload['audio_url'];
         $this->error = $payload['error'];
     }
@@ -96,6 +123,8 @@ class TranslationWorkspace extends Component
         $this->workflowId = null;
         $this->status = null;
         $this->translation = null;
+        $this->streamDebug = null;
+        $this->workerLogs = null;
         $this->audioUrl = null;
         $this->error = null;
     }
