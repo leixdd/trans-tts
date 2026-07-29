@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class TranslationTurnStreamController extends Controller
 {
     /**
-     * Relay persisted Novita progress as an application SSE feed for the owning visitor.
+     * Relay persisted AIProvider progress as an application SSE feed for the owning visitor.
      */
     public function __invoke(
         Request $request,

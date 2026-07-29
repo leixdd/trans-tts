@@ -4,7 +4,7 @@ use App\Services\AnonymousVisitor;
 use App\Services\TranslationWorkflowStore;
 
 beforeEach(function () {
-    configureNovitaForTests([
+    configureAIProviderForTests([
         'stream_poll_seconds' => 0.05,
         'stream_heartbeat_seconds' => 10,
         'stream_max_seconds' => 1,
@@ -85,10 +85,10 @@ it('exposes a stream snapshot through the workflow store', function () {
     ]);
 });
 
-it('keeps the configurable Novita HTTP timeout intact', function () {
-    configureNovitaForTests(['timeout' => 90]);
+it('keeps the configurable AIProvider HTTP timeout intact', function () {
+    configureAIProviderForTests(['timeout' => 90]);
 
-    expect(config('services.novita.timeout'))->toBe(90);
+    expect(config('services.ai_provider.timeout'))->toBe(90);
 });
 
 it('includes stream_url for in-flight public payloads', function () {

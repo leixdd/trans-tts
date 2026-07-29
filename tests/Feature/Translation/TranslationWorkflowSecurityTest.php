@@ -14,7 +14,7 @@ function signedAudioRequestPath(string $signedUrl): string
 }
 
 beforeEach(function () {
-    configureNovitaForTests();
+    configureAIProviderForTests();
     Storage::fake('local');
     config(['app.url' => 'http://localhost']);
     URL::forceRootUrl('http://localhost');
@@ -75,7 +75,7 @@ it('streams WAV audio for the owning visitor with a valid signed URL', function 
 it('denies audio access for an expired turn', function () {
     $visitorId = '22222222-2222-4222-8222-222222222222';
 
-    configureNovitaForTests(['signed_url_minutes' => 60, 'retention_days' => 30]);
+    configureAIProviderForTests(['signed_url_minutes' => 60, 'retention_days' => 30]);
 
     $store = app(TranslationWorkflowStore::class);
     $workflow = $store->create($visitorId, 'Hello');

@@ -35,23 +35,23 @@ return [
         ],
     ],
 
-    'novita' => [
-        'api_key' => env('NOVITA_API_KEY'),
-        'chat_base_url' => env('NOVITA_CHAT_BASE_URL', 'https://api.novita.ai/openai/v1'),
+    'ai_provider' => [
+        'api_key' => env('AI_PROVIDER_API_KEY'),
+        'chat_base_url' => env('AI_PROVIDER_CHAT_BASE_URL', 'https://api.novita.ai/openai/v1'),
         'tts_endpoint' => env(
-            'NOVITA_TTS_ENDPOINT',
+            'AI_PROVIDER_TTS_ENDPOINT',
             'https://api.novita.ai/v3/fish-audio-s2-pro-text-to-speech',
         ),
-        'translation_model' => env('NOVITA_TRANSLATION_MODEL', 'google/gemma-4-31b-it'),
-        'fish_reference_id' => env('NOVITA_FISH_REFERENCE_ID'),
-        'timeout' => (int) env('NOVITA_TIMEOUT', 60),
-        'retention_days' => (int) env('NOVITA_RETENTION_DAYS', 30),
-        'history_limit' => (int) env('NOVITA_HISTORY_LIMIT', 50),
-        'signed_url_minutes' => (int) env('NOVITA_SIGNED_URL_MINUTES', env('NOVITA_RETENTION_MINUTES', 60)),
-        'stream_poll_seconds' => (float) env('NOVITA_STREAM_POLL_SECONDS', 0.5),
-        'stream_heartbeat_seconds' => (float) env('NOVITA_STREAM_HEARTBEAT_SECONDS', 15),
-        'stream_max_seconds' => (float) env('NOVITA_STREAM_MAX_SECONDS', 300),
-        'user_agent' => env('NOVITA_USER_AGENT', 'tts-app/1.0'),
+        'translation_model' => env('AI_PROVIDER_TRANSLATION_MODEL', 'google/gemma-4-31b-it'),
+        'fish_reference_id' => env('AI_PROVIDER_FISH_REFERENCE_ID'),
+        'timeout' => (int) env('AI_PROVIDER_TIMEOUT', 60),
+        'retention_days' => (int) env('AI_PROVIDER_RETENTION_DAYS', 30),
+        'history_limit' => (int) env('AI_PROVIDER_HISTORY_LIMIT', 50),
+        'signed_url_minutes' => (int) env('AI_PROVIDER_SIGNED_URL_MINUTES', env('AI_PROVIDER_RETENTION_MINUTES', 60)),
+        'stream_poll_seconds' => (float) env('AI_PROVIDER_STREAM_POLL_SECONDS', 0.5),
+        'stream_heartbeat_seconds' => (float) env('AI_PROVIDER_STREAM_HEARTBEAT_SECONDS', 15),
+        'stream_max_seconds' => (float) env('AI_PROVIDER_STREAM_MAX_SECONDS', 300),
+        'user_agent' => env('AI_PROVIDER_USER_AGENT', 'tts-app/1.0'),
     ],
 
 ];

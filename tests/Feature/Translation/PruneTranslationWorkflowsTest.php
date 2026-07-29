@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
-    configureNovitaForTests(['retention_days' => 30]);
+    configureAIProviderForTests(['retention_days' => 30]);
     Storage::fake('local');
 });
 
@@ -31,7 +31,7 @@ it('removes expired turns and private audio files', function () {
 });
 
 it('keeps only the latest history limit turns per visitor', function () {
-    configureNovitaForTests(['history_limit' => 2]);
+    configureAIProviderForTests(['history_limit' => 2]);
 
     $store = app(TranslationWorkflowStore::class);
     $first = $store->create('visitor-a', 'One');

@@ -478,17 +478,17 @@ class TranslationWorkflowStore
 
     private function retentionDays(): int
     {
-        return max(1, (int) config('services.novita.retention_days', 30));
+        return max(1, (int) config('services.ai_provider.retention_days', 30));
     }
 
     private function historyLimit(): int
     {
-        return max(1, (int) config('services.novita.history_limit', 50));
+        return max(1, (int) config('services.ai_provider.history_limit', 50));
     }
 
     private function signedUrlMinutes(): int
     {
-        return max(1, (int) config('services.novita.signed_url_minutes', 60));
+        return max(1, (int) config('services.ai_provider.signed_url_minutes', 60));
     }
 
     private function disk(): FilesystemAdapter

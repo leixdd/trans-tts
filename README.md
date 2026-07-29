@@ -1,6 +1,6 @@
 # English → Japanese Translation & TTS
 
-Public chat-style web app that accepts English messages, translates them to Japanese via Novita (`google/gemma-4-31b-it`), and synthesizes Japanese speech with Fish Audio S2 Pro (WAV). Each turn is queued in the background; the Livewire UI shows an ordered history, relays progressive translation over an application SSE feed (with low-frequency polling fallback), and autoplays completed audio in submission order (FIFO).
+Public chat-style web app that accepts English messages, translates them to Japanese via AIProvider (`google/gemma-4-31b-it`), and synthesizes Japanese speech with Fish Audio S2 Pro (WAV). Each turn is queued in the background; the Livewire UI shows an ordered history, relays progressive translation over an application SSE feed (with low-frequency polling fallback), and autoplays completed audio in submission order (FIFO).
 
 **Stack:** Laravel 13, Livewire 4, Laravel Octane (FrankenPHP), Bun + Vite + Tailwind CSS 4.
 
@@ -13,7 +13,7 @@ Public chat-style web app that accepts English messages, translates them to Japa
 
 ## Environment
 
-Copy `.env.example` to `.env`, generate an app key, and set Novita credentials:
+Copy `.env.example` to `.env`, generate an app key, and set AIProvider credentials:
 
 ```bash
 cp .env.example .env
@@ -25,28 +25,28 @@ php artisan key:generate
 | Variable | Purpose |
 |----------|---------|
 | `APP_KEY` | Laravel encryption key |
-| `NOVITA_API_KEY` | Novita API key for translation and TTS |
-| `NOVITA_FISH_REFERENCE_ID` | Server-configured Fish Audio voice reference |
+| `AI_PROVIDER_API_KEY` | AIProvider API key for translation and TTS |
+| `AI_PROVIDER_FISH_REFERENCE_ID` | Server-configured Fish Audio voice reference |
 
 ### Optional (defaults in `config/services.php`)
 
 | Variable | Default |
 |----------|---------|
-| `NOVITA_CHAT_BASE_URL` | `https://api.novita.ai/openai/v1` |
-| `NOVITA_TTS_ENDPOINT` | `https://api.novita.ai/v3/fish-audio-s2-pro-text-to-speech` |
-| `NOVITA_TRANSLATION_MODEL` | `google/gemma-4-31b-it` |
-| `NOVITA_TIMEOUT` | `60` (seconds; outbound Novita HTTP/SSE client timeout — adjustable) |
-| `NOVITA_RETENTION_DAYS` | `30` (anonymous chat history lifetime) |
-| `NOVITA_HISTORY_LIMIT` | `50` (max turns kept per visitor) |
-| `NOVITA_SIGNED_URL_MINUTES` | `60` (temporary audio URL lifetime) |
-| `NOVITA_STREAM_POLL_SECONDS` | `0.5` (app SSE observation interval) |
-| `NOVITA_STREAM_HEARTBEAT_SECONDS` | `15` (app SSE heartbeat interval) |
-| `NOVITA_STREAM_MAX_SECONDS` | `300` (app SSE connection lifetime before reconnect) |
-| `NOVITA_USER_AGENT` | `tts-app/1.0` |
+| `AI_PROVIDER_CHAT_BASE_URL` | `https://api.novita.ai/openai/v1` |
+| `AI_PROVIDER_TTS_ENDPOINT` | `https://api.novita.ai/v3/fish-audio-s2-pro-text-to-speech` |
+| `AI_PROVIDER_TRANSLATION_MODEL` | `google/gemma-4-31b-it` |
+| `AI_PROVIDER_TIMEOUT` | `60` (seconds; outbound AIProvider HTTP/SSE client timeout — adjustable) |
+| `AI_PROVIDER_RETENTION_DAYS` | `30` (anonymous chat history lifetime) |
+| `AI_PROVIDER_HISTORY_LIMIT` | `50` (max turns kept per visitor) |
+| `AI_PROVIDER_SIGNED_URL_MINUTES` | `60` (temporary audio URL lifetime) |
+| `AI_PROVIDER_STREAM_POLL_SECONDS` | `0.5` (app SSE observation interval) |
+| `AI_PROVIDER_STREAM_HEARTBEAT_SECONDS` | `15` (app SSE heartbeat interval) |
+| `AI_PROVIDER_STREAM_MAX_SECONDS` | `300` (app SSE connection lifetime before reconnect) |
+| `AI_PROVIDER_USER_AGENT` | `tts-app/1.0` |
 
 Octane settings (`OCTANE_SERVER`, `OCTANE_HOST`, `OCTANE_PORT`, etc.) are documented in `.env.example`.
 
-> **Security:** Do not copy Novita API keys from other projects (e.g. CIELAI) into this repository, Docker images, fixtures, or documentation. Use project-specific credentials and rotate any keys that may have been exposed elsewhere.
+> **Security:** Do not copy AIProvider API keys from other projects (e.g. CIELAI) into this repository, Docker images, fixtures, or documentation. Use project-specific credentials and rotate any keys that may have been exposed elsewhere.
 
 ## Local development
 
@@ -78,7 +78,7 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 ## Docker
 
-Ensure `.env` exists with `APP_KEY`, `NOVITA_API_KEY`, and `NOVITA_FISH_REFERENCE_ID`:
+Ensure `.env` exists with `APP_KEY`, `AI_PROVIDER_API_KEY`, and `AI_PROVIDER_FISH_REFERENCE_ID`:
 
 ```bash
 docker compose up --build
@@ -97,7 +97,7 @@ Shared volumes persist the SQLite database and private WAV files under `storage/
 
 ## Chat history and audio
 
-Turns are stored in the `translation_turns` table and keyed by an anonymous encrypted `tts_visitor` cookie (not a user account). Each visitor keeps at most `NOVITA_HISTORY_LIMIT` turns for `NOVITA_RETENTION_DAYS`. Private WAV files live under `storage/app/private/translation-audio` and are streamed only through signed URLs for the owning visitor.
+Turns are stored in the `translation_turns` table and keyed by an anonymous encrypted `tts_visitor` cookie (not a user account). Each visitor keeps at most `AI_PROVIDER_HISTORY_LIMIT` turns for `AI_PROVIDER_RETENTION_DAYS`. Private WAV files live under `storage/app/private/translation-audio` and are streamed only through signed URLs for the owning visitor.
 
 Autoplay uses a browser FIFO queue ordered by submission time (`resources/js/translation-playback.js`). Parallel workers may finish later chats first; the browser buffers those clips until every earlier turn has finished playing or failed. Only one clip plays at a time.
 
@@ -107,15 +107,15 @@ The `translations:prune` command removes expired turns and orphaned audio files;
 
 ## Progressive translation (SSE relay)
 
-Novita chat completions are still consumed as SSE inside the queue worker. Chunks are persisted on the turn (`translation` / `stream_debug`). The browser does **not** talk to Novita directly.
+AIProvider chat completions are still consumed as SSE inside the queue worker. Chunks are persisted on the turn (`translation` / `stream_debug`). The browser does **not** talk to AIProvider directly.
 
 For each in-flight turn, the owning visitor can open:
 
 `GET /translations/{workflow}/stream`
 
-That application SSE feed emits idempotent snapshots (`snapshot` / `terminal`), plus `heartbeat` keep-alives and a bounded `reconnect` close after `NOVITA_STREAM_MAX_SECONDS`. `EventSource` reconnects and reads the latest database snapshot — there is no separate event-log table.
+That application SSE feed emits idempotent snapshots (`snapshot` / `terminal`), plus `heartbeat` keep-alives and a bounded `reconnect` close after `AI_PROVIDER_STREAM_MAX_SECONDS`. `EventSource` reconnects and reads the latest database snapshot — there is no separate event-log table.
 
-`NOVITA_TIMEOUT` still applies to the outbound Novita HTTP client. Raising it is how you allow longer Novita streams; the app SSE relay only delivers chunks already received and stored by the worker.
+`AI_PROVIDER_TIMEOUT` still applies to the outbound AIProvider HTTP client. Raising it is how you allow longer AIProvider streams; the app SSE relay only delivers chunks already received and stored by the worker.
 
 Livewire keeps a slower `wire:poll` fallback (5s) so missed or dropped browser streams still converge. On a `terminal` event the page performs a canonical Livewire refresh so audio URLs and FIFO playback stay authoritative.
 

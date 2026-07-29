@@ -6,10 +6,10 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
-class NovitaSpeechService
+class AIProviderSpeechService
 {
     /**
-     * Synthesize Japanese text to WAV bytes via Novita Fish Audio S2 Pro.
+     * Synthesize Japanese text to WAV bytes via AIProvider Fish Audio S2 Pro.
      *
      * Stateless and Octane-safe: no request-specific mutable properties.
      *
@@ -17,22 +17,22 @@ class NovitaSpeechService
      */
     public function synthesize(string $japaneseText): string
     {
-        $apiKey = config('services.novita.api_key');
+        $apiKey = config('services.ai_provider.api_key');
         if (! is_string($apiKey) || $apiKey === '') {
-            throw new RuntimeException('Novita API key is not configured.');
+            throw new RuntimeException('AIProvider API key is not configured.');
         }
 
-        $referenceId = config('services.novita.fish_reference_id');
+        $referenceId = config('services.ai_provider.fish_reference_id');
         if (! is_string($referenceId) || $referenceId === '') {
-            throw new RuntimeException('Novita Fish Audio reference_id is not configured.');
+            throw new RuntimeException('AIProvider Fish Audio reference_id is not configured.');
         }
 
-        $endpoint = (string) config('services.novita.tts_endpoint');
-        $timeout = (int) config('services.novita.timeout', 60);
-        $userAgent = (string) config('services.novita.user_agent', 'tts-app/1.0');
+        $endpoint = (string) config('services.ai_provider.tts_endpoint');
+        $timeout = (int) config('services.ai_provider.timeout', 60);
+        $userAgent = (string) config('services.ai_provider.user_agent', 'tts-app/1.0');
 
         if ($endpoint === '') {
-            throw new RuntimeException('Novita TTS endpoint is not configured.');
+            throw new RuntimeException('AIProvider TTS endpoint is not configured.');
         }
 
         if (trim($japaneseText) === '') {
@@ -54,19 +54,19 @@ class NovitaSpeechService
                     'reference_id' => $referenceId,
                 ]);
         } catch (ConnectionException $exception) {
-            throw new RuntimeException('Novita speech request failed to connect.', 0, $exception);
+            throw new RuntimeException('AIProvider speech request failed to connect.', 0, $exception);
         }
 
         if ($response->failed()) {
             throw new RuntimeException(
-                'Novita speech request failed with HTTP '.$response->status().'.',
+                'AIProvider speech request failed with HTTP '.$response->status().'.',
             );
         }
 
         $audio = $response->body();
 
         if ($audio === '' || ! str_starts_with($audio, 'RIFF')) {
-            throw new RuntimeException('Novita speech returned empty or invalid WAV audio.');
+            throw new RuntimeException('AIProvider speech returned empty or invalid WAV audio.');
         }
 
         return $audio;

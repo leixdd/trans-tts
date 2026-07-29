@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 
 beforeEach(function () {
-    configureNovitaForTests();
+    configureAIProviderForTests();
 });
 
 it('shows validation errors for empty submit', function () {
@@ -111,7 +111,7 @@ it('polls in-flight turns to completed state and dispatches FIFO audio events', 
         ->call('toggleDebugLogs')
         ->assertSet('showDebugLogs', true)
         ->assertSee('Worker debug logs')
-        ->assertSee('Novita stream debug')
+        ->assertSee('AIProvider stream debug')
         ->assertSee('翻訳完了');
 
     $turns = $component->get('turns');
@@ -126,15 +126,15 @@ it('toggles debug log sections via the debug icon', function () {
         ->assertSet('showDebugLogs', false)
         ->assertSee('aria-label="Debug controls"', false)
         ->assertDontSee('Worker debug logs')
-        ->assertDontSee('Novita stream debug')
+        ->assertDontSee('AIProvider stream debug')
         ->call('toggleDebugLogs')
         ->assertSet('showDebugLogs', true)
         ->assertSee('Worker debug logs')
-        ->assertSee('Novita stream debug')
+        ->assertSee('AIProvider stream debug')
         ->call('toggleDebugLogs')
         ->assertSet('showDebugLogs', false)
         ->assertDontSee('Worker debug logs')
-        ->assertDontSee('Novita stream debug');
+        ->assertDontSee('AIProvider stream debug');
 });
 
 it('keeps composer empty after submit and surfaces failure in the thread', function () {

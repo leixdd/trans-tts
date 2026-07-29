@@ -40,7 +40,7 @@ class AnonymousVisitor
 
     public function makeCookie(string $visitorId): SymfonyCookie
     {
-        $minutes = max(1, (int) config('services.novita.retention_days', 30) * 24 * 60);
+        $minutes = max(1, (int) config('services.ai_provider.retention_days', 30) * 24 * 60);
 
         return cookie(
             self::COOKIE_NAME,

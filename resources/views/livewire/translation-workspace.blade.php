@@ -226,7 +226,7 @@
             >
                 <div class="flex items-center justify-between gap-3">
                     <h2 id="stream-debug-heading" class="text-sm font-semibold tracking-wide text-amber-950 uppercase">
-                        Novita stream debug
+                        AIProvider stream debug
                     </h2>
                     @if ($debug && $debug['stream_debug'])
                         <span class="text-xs text-amber-800">SSE chunks</span>
@@ -234,7 +234,7 @@
                 </div>
                 <pre
                     class="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-amber-200 bg-white px-3 py-2 font-mono text-xs leading-relaxed text-stone-800"
-                >@if ($debug && $debug['stream_debug']){{ $debug['stream_debug'] }}@elseif ($this->hasInFlightTurns)Waiting for Novita stream chunks…@elseStream output will appear here after you submit.@endif</pre>
+                >@if ($debug && $debug['stream_debug']){{ $debug['stream_debug'] }}@elseif ($this->hasInFlightTurns)Waiting for AIProvider stream chunks…@elseStream output will appear here after you submit.@endif</pre>
             </section>
         </div>
     @endif

@@ -6,7 +6,7 @@ use App\Services\TranslationWorkflowStore;
 use Livewire\Livewire;
 
 beforeEach(function () {
-    configureNovitaForTests();
+    configureAIProviderForTests();
 });
 
 it('skips failed earlier turns when notifying FIFO playback for a later completion', function () {

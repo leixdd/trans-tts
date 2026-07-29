@@ -116,16 +116,16 @@ class TranslationTurnStreamService
 
     private function pollSeconds(): float
     {
-        return max(0.1, (float) config('services.novita.stream_poll_seconds', 0.5));
+        return max(0.1, (float) config('services.ai_provider.stream_poll_seconds', 0.5));
     }
 
     private function heartbeatSeconds(): float
     {
-        return max(1.0, (float) config('services.novita.stream_heartbeat_seconds', 15));
+        return max(1.0, (float) config('services.ai_provider.stream_heartbeat_seconds', 15));
     }
 
     private function maxSeconds(): float
     {
-        return max(5.0, (float) config('services.novita.stream_max_seconds', 300));
+        return max(5.0, (float) config('services.ai_provider.stream_max_seconds', 300));
     }
 }

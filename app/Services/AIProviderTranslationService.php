@@ -8,12 +8,12 @@ use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Throwable;
 
-class NovitaTranslationService
+class AIProviderTranslationService
 {
     private const SYSTEM_PROMPT = 'You are a translator. Translate the user\'s English text into Japanese only. Return only the Japanese translation text with no explanations, notes, labels, or quotation marks.';
 
     /**
-     * Translate English source text to Japanese via Novita streaming chat completions.
+     * Translate English source text to Japanese via AIProvider streaming chat completions.
      *
      * Stateless and Octane-safe: no request-specific mutable properties.
      *
@@ -23,18 +23,18 @@ class NovitaTranslationService
      */
     public function translate(string $englishText, ?callable $onChunk = null): string
     {
-        $apiKey = config('services.novita.api_key');
+        $apiKey = config('services.ai_provider.api_key');
         if (! is_string($apiKey) || $apiKey === '') {
-            throw new RuntimeException('Novita API key is not configured.');
+            throw new RuntimeException('AIProvider API key is not configured.');
         }
 
-        $baseUrl = rtrim((string) config('services.novita.chat_base_url'), '/');
-        $model = (string) config('services.novita.translation_model');
-        $timeout = (int) config('services.novita.timeout', 60);
-        $userAgent = (string) config('services.novita.user_agent', 'tts-app/1.0');
+        $baseUrl = rtrim((string) config('services.ai_provider.chat_base_url'), '/');
+        $model = (string) config('services.ai_provider.translation_model');
+        $timeout = (int) config('services.ai_provider.timeout', 60);
+        $userAgent = (string) config('services.ai_provider.user_agent', 'tts-app/1.0');
 
         if ($baseUrl === '' || $model === '') {
-            throw new RuntimeException('Novita translation endpoint or model is not configured.');
+            throw new RuntimeException('AIProvider translation endpoint or model is not configured.');
         }
 
         try {
@@ -62,12 +62,12 @@ class NovitaTranslationService
                     'stream' => true,
                 ]);
         } catch (ConnectionException $exception) {
-            throw new RuntimeException('Novita translation request failed to connect.', 0, $exception);
+            throw new RuntimeException('AIProvider translation request failed to connect.', 0, $exception);
         }
 
         if ($response->failed()) {
             throw new RuntimeException(
-                'Novita translation request failed with HTTP '.$response->status().'.',
+                'AIProvider translation request failed with HTTP '.$response->status().'.',
             );
         }
 
@@ -115,11 +115,11 @@ class NovitaTranslationService
                     /** @var mixed $decoded */
                     $decoded = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
                 } catch (Throwable) {
-                    throw new RuntimeException('Novita translation returned a malformed stream chunk.');
+                    throw new RuntimeException('AIProvider translation returned a malformed stream chunk.');
                 }
 
                 if (! is_array($decoded)) {
-                    throw new RuntimeException('Novita translation returned a malformed stream chunk.');
+                    throw new RuntimeException('AIProvider translation returned a malformed stream chunk.');
                 }
 
                 /** @var mixed $delta */
@@ -140,7 +140,7 @@ class NovitaTranslationService
         $translation = trim($translation);
 
         if ($translation === '') {
-            throw new RuntimeException('Novita translation returned an empty response.');
+            throw new RuntimeException('AIProvider translation returned an empty response.');
         }
 
         return $translation;

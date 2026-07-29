@@ -2,8 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Services\NovitaSpeechService;
-use App\Services\NovitaTranslationService;
+use App\Services\AIProviderSpeechService;
+use App\Services\AIProviderTranslationService;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -33,8 +33,8 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
 
     public function handle(
         TranslationWorkflowStore $store,
-        NovitaTranslationService $translator,
-        NovitaSpeechService $speech,
+        AIProviderTranslationService $translator,
+        AIProviderSpeechService $speech,
     ): void {
         $workflow = $store->find($this->workflowId);
 
@@ -61,7 +61,7 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
             $translation = $workflow['translation'];
 
             if ($translation === null || $translation === '') {
-                $store->appendWorkerLog($this->workflowId, 'Starting Novita translation…');
+                $store->appendWorkerLog($this->workflowId, 'Starting AIProvider translation…');
                 $store->markStatus($this->workflowId, 'translating');
                 $translation = $translator->translate(
                     $workflow['source_text'],

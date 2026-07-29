@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
 
 beforeEach(function () {
-    configureNovitaForTests();
+    configureAIProviderForTests();
 });
 
 it('rejects empty text when starting a workflow', function () {
