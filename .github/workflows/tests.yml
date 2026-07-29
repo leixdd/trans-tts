@@ -18,6 +18,26 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      - name: Reject Cursor co-author trailers
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+            bash .githooks/check-cursor-trailers.sh "${base}..${head}"
+          else
+            before="${{ github.event.before }}"
+            after="${{ github.sha }}"
+            # Only scan commits introduced by this push (skip new-branch / force zeroes
+            # so pre-existing history with Cursor trailers does not fail CI).
+            if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ]; then
+              bash .githooks/check-cursor-trailers.sh "${before}..${after}"
+            else
+              echo "Skipping Cursor trailer check (no comparable before SHA)."
+            fi
+          fi
 
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2

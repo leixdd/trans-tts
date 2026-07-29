@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Strip Cursor agent attribution from the commit message before the commit is created.
+set -euo pipefail
+
+msg_file="${1:-}"
+[[ -n "$msg_file" && -f "$msg_file" ]] || exit 0
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+
+# Drop lines that mention Cursor's agent email or Co-authored-by: Cursor trailer.
+# grep exit 1 means every line matched (message would be empty) — still write the result.
+grep -viE \
+	-e 'cursoragent@cursor\.com' \
+	-e '^[[:space:]]*Co-authored-by:[[:space:]]*Cursor\b' \
+	"$msg_file" >"$tmp" || true
+
+cat "$tmp" >"$msg_file"
