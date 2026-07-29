@@ -4,10 +4,11 @@ Guidance for AI agents working in this repository.
 
 ## Project
 
-- **App:** Public English→Japanese chat translation page with Fish Audio TTS via Novita (queued turns, anonymous history, app SSE progress relay + poll fallback, FIFO autoplay; see [README.md](README.md) for setup).
+- **App:** Public English→Japanese chat translation page with Fish Audio TTS via Novita (queued turns, anonymous history, app SSE progress relay + poll fallback, browser FIFO autoplay with queue-gated custom play/pause controls; see [README.md](README.md) for setup).
 - **Stack:** Laravel 13, Livewire 4, Octane (FrankenPHP), Pest, Pint, Larastan (level 7)
 - **Layout:** Standard Laravel (not domain-driven). Keep new code in the standard folders.
 - **Package manager (JS):** Use **bun** only. Never use npm or nodejs.
+- **Playback client:** FIFO coordinator lives in `resources/js/translation-playback.js` (wired from `resources/js/app.js`). Ordering is browser-side; workers may complete out of order.
 - **Runtime (local/Docker):** Octane web + `queue:work` + `schedule:work` (hourly `translations:prune`).
 
 ## Before Changing Code
@@ -48,6 +49,7 @@ composer types:check   # PHPStan / Larastan
 composer test          # lint check + types + Pest
 php artisan test       # Pest only
 bun install            # JS deps (never npm)
+bun test resources/js  # FIFO playback coordinator tests
 bun run build          # Vite build
 ```
 

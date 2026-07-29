@@ -113,14 +113,32 @@
 
                                 @if ($turn['audio_url'])
                                     <div class="space-y-2">
-                                        <audio
-                                            controls
-                                            class="w-full"
-                                            src="{{ $turn['audio_url'] }}"
+                                        <div
+                                            data-playback-shell="{{ $turn['id'] }}"
+                                            data-audio-src="{{ $turn['audio_url'] }}"
                                             data-turn-audio="{{ $turn['id'] }}"
+                                            data-playback-state="idle"
+                                            data-playback-enabled="false"
+                                            class="hidden"
                                         >
-                                            Your browser does not support the audio element.
-                                        </audio>
+                                            <button
+                                                type="button"
+                                                data-playback-toggle="{{ $turn['id'] }}"
+                                                disabled
+                                                title="Play speech"
+                                                aria-label="Play speech"
+                                                class="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium text-stone-800 shadow-sm transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                <span data-playback-icon-play class="inline-flex items-center gap-2">
+                                                    <x-lucide-icon name="play" class="size-4 shrink-0" aria-hidden="true" />
+                                                    Play
+                                                </span>
+                                                <span data-playback-icon-pause class="hidden inline-flex items-center gap-2">
+                                                    <x-lucide-icon name="pause" class="size-4 shrink-0" aria-hidden="true" />
+                                                    Pause
+                                                </span>
+                                            </button>
+                                        </div>
                                         <p
                                             data-autoplay-blocked="{{ $turn['id'] }}"
                                             class="hidden text-xs text-amber-800"
