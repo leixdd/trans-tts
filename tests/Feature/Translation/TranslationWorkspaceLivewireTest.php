@@ -122,8 +122,9 @@ it('exposes SSE stream URLs for in-flight turns and keeps fallback polling', fun
         ->assertSee('wire:poll.5s="pollStatus"', false);
 });
 
-it('exposes a stable data hook on the chat scroll container', function () {
+it('exposes stable data hooks on the chat card and scroll container', function () {
     Livewire::test(TranslationWorkspace::class)
+        ->assertSee('data-translation-chat', false)
         ->assertSee('data-translation-scroll', false)
         ->assertSee('data-translation-workspace', false);
 });

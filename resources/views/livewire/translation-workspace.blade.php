@@ -39,12 +39,13 @@
     </div>
 
     <section
-        class="flex h-[min(40rem,70dvh)] min-h-[28rem] max-h-[70dvh] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white/80 shadow-sm"
+        data-translation-chat
+        class="rounded-xl border border-stone-200 bg-white/80 shadow-sm"
         aria-label="Translation chat"
     >
         <div
             data-translation-scroll
-            class="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-5 sm:px-5"
+            class="space-y-4 px-4 py-5 sm:px-5"
             aria-live="polite"
         >
             @forelse ($turns as $turn)
