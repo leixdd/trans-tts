@@ -42,6 +42,25 @@ it('allows another submit while a turn is still in flight', function () {
     Queue::assertPushed(TranslateAndSynthesizeSpeech::class, 2);
 });
 
+it('exposes SSE stream URLs for in-flight turns and keeps fallback polling', function () {
+    Queue::fake();
+
+    $visitorId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+    $component = Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->set('text', 'Stream me')
+        ->call('submit');
+
+    $turns = $component->get('turns');
+    expect($turns)->toHaveCount(1)
+        ->and($turns[0]['stream_url'])->toBe(route('translations.stream', ['workflow' => $turns[0]['id']]));
+
+    $component
+        ->assertSee('data-turn-stream=', false)
+        ->assertSee('wire:poll.5s="pollStatus"', false);
+});
+
 it('restores visitor history after remount', function () {
     $visitorId = '44444444-4444-4444-8444-444444444444';
     $store = app(TranslationWorkflowStore::class);
@@ -81,6 +100,7 @@ it('polls in-flight turns to completed state and dispatches FIFO audio events', 
             'stream_debug' => null,
             'worker_logs' => null,
             'audio_url' => null,
+            'stream_url' => route('translations.stream', ['workflow' => $turn['id']]),
             'error' => null,
             'created_at' => now()->toIso8601String(),
         ]])

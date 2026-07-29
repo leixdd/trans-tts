@@ -24,6 +24,9 @@ function configureNovitaForTests(array $overrides = []): void
         'services.novita.retention_days' => $overrides['retention_days'] ?? 30,
         'services.novita.history_limit' => $overrides['history_limit'] ?? 50,
         'services.novita.signed_url_minutes' => $overrides['signed_url_minutes'] ?? 60,
+        'services.novita.stream_poll_seconds' => $overrides['stream_poll_seconds'] ?? 0.1,
+        'services.novita.stream_heartbeat_seconds' => $overrides['stream_heartbeat_seconds'] ?? 15,
+        'services.novita.stream_max_seconds' => $overrides['stream_max_seconds'] ?? 2,
         'services.novita.user_agent' => $overrides['user_agent'] ?? 'tts-app-test/1.0',
     ]);
 }

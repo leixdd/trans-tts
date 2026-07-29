@@ -31,6 +31,7 @@ class TranslationWorkspace extends Component
      *     stream_debug: string|null,
      *     worker_logs: string|null,
      *     audio_url: string|null,
+     *     stream_url: string|null,
      *     error: string|null,
      *     created_at: string
      * }>
@@ -80,6 +81,7 @@ class TranslationWorkspace extends Component
      *     stream_debug: string|null,
      *     worker_logs: string|null,
      *     audio_url: string|null,
+     *     stream_url: string|null,
      *     error: string|null,
      *     created_at: string
      * }|null

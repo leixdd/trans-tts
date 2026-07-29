@@ -1,6 +1,7 @@
 <div
     class="mx-auto flex w-full max-w-3xl flex-col gap-6"
-    @if ($this->hasInFlightTurns) wire:poll.2s="pollStatus" @endif
+    data-translation-workspace
+    @if ($this->hasInFlightTurns) wire:poll.5s="pollStatus" @endif
 >
     <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -43,7 +44,14 @@
     >
         <div class="flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-5" aria-live="polite">
             @forelse ($turns as $turn)
-                <article class="space-y-3" wire:key="turn-{{ $turn['id'] }}">
+                <article
+                    class="space-y-3"
+                    wire:key="turn-{{ $turn['id'] }}"
+                    data-turn-id="{{ $turn['id'] }}"
+                    @if (! empty($turn['stream_url']))
+                        data-turn-stream="{{ $turn['stream_url'] }}"
+                    @endif
+                >
                     <div class="flex justify-end">
                         <div class="max-w-[85%] rounded-2xl rounded-br-md bg-teal-800 px-4 py-3 text-sm leading-relaxed text-white whitespace-pre-wrap">
                             {{ $turn['source_text'] }}
@@ -54,6 +62,7 @@
                         <div class="max-w-[85%] space-y-3 rounded-2xl rounded-bl-md border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-relaxed text-stone-900">
                             <div class="flex items-center justify-between gap-3">
                                 <span
+                                    data-turn-status="{{ $turn['status'] }}"
                                     @class([
                                         'rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
                                         'bg-amber-100 text-amber-900' => in_array($turn['status'], ['queued', 'translating', 'synthesizing'], true),
@@ -74,7 +83,7 @@
                             </div>
 
                             @if (in_array($turn['status'], ['queued', 'translating', 'synthesizing'], true))
-                                <p class="text-stone-600">
+                                <p class="text-stone-600" data-turn-status-label>
                                     @switch($turn['status'])
                                         @case('queued')
                                             Queued — waiting for a worker…
@@ -87,12 +96,20 @@
                                             @break
                                     @endswitch
                                 </p>
+
+                                <p
+                                    data-turn-translation
+                                    @class([
+                                        'whitespace-pre-wrap text-stone-900',
+                                        'hidden' => blank($turn['translation']),
+                                    ])
+                                >{{ $turn['translation'] }}</p>
                             @elseif ($turn['status'] === 'failed')
-                                <p class="font-medium text-red-800" role="alert">
+                                <p class="font-medium text-red-800" role="alert" data-turn-error>
                                     {{ $turn['error'] ?: 'Translation failed. Please try again.' }}
                                 </p>
                             @else
-                                <p class="whitespace-pre-wrap">{{ $turn['translation'] }}</p>
+                                <p class="whitespace-pre-wrap" data-turn-translation>{{ $turn['translation'] }}</p>
 
                                 @if ($turn['audio_url'])
                                     <div class="space-y-2">

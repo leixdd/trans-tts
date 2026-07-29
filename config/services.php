@@ -48,6 +48,9 @@ return [
         'retention_days' => (int) env('NOVITA_RETENTION_DAYS', 30),
         'history_limit' => (int) env('NOVITA_HISTORY_LIMIT', 50),
         'signed_url_minutes' => (int) env('NOVITA_SIGNED_URL_MINUTES', env('NOVITA_RETENTION_MINUTES', 60)),
+        'stream_poll_seconds' => (float) env('NOVITA_STREAM_POLL_SECONDS', 0.5),
+        'stream_heartbeat_seconds' => (float) env('NOVITA_STREAM_HEARTBEAT_SECONDS', 15),
+        'stream_max_seconds' => (float) env('NOVITA_STREAM_MAX_SECONDS', 300),
         'user_agent' => env('NOVITA_USER_AGENT', 'tts-app/1.0'),
     ],
 

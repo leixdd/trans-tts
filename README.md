@@ -1,6 +1,6 @@
 # English → Japanese Translation & TTS
 
-Public chat-style web app that accepts English messages, translates them to Japanese via Novita (`google/gemma-4-31b-it`), and synthesizes Japanese speech with Fish Audio S2 Pro (WAV). Each turn is queued in the background; the Livewire UI shows an ordered history, polls in-flight turns, and autoplays completed audio in submission order (FIFO).
+Public chat-style web app that accepts English messages, translates them to Japanese via Novita (`google/gemma-4-31b-it`), and synthesizes Japanese speech with Fish Audio S2 Pro (WAV). Each turn is queued in the background; the Livewire UI shows an ordered history, relays progressive translation over an application SSE feed (with low-frequency polling fallback), and autoplays completed audio in submission order (FIFO).
 
 **Stack:** Laravel 13, Livewire 4, Laravel Octane (FrankenPHP), Bun + Vite + Tailwind CSS 4.
 
@@ -35,10 +35,13 @@ php artisan key:generate
 | `NOVITA_CHAT_BASE_URL` | `https://api.novita.ai/openai/v1` |
 | `NOVITA_TTS_ENDPOINT` | `https://api.novita.ai/v3/fish-audio-s2-pro-text-to-speech` |
 | `NOVITA_TRANSLATION_MODEL` | `google/gemma-4-31b-it` |
-| `NOVITA_TIMEOUT` | `60` (seconds) |
+| `NOVITA_TIMEOUT` | `60` (seconds; outbound Novita HTTP/SSE client timeout — adjustable) |
 | `NOVITA_RETENTION_DAYS` | `30` (anonymous chat history lifetime) |
 | `NOVITA_HISTORY_LIMIT` | `50` (max turns kept per visitor) |
 | `NOVITA_SIGNED_URL_MINUTES` | `60` (temporary audio URL lifetime) |
+| `NOVITA_STREAM_POLL_SECONDS` | `0.5` (app SSE observation interval) |
+| `NOVITA_STREAM_HEARTBEAT_SECONDS` | `15` (app SSE heartbeat interval) |
+| `NOVITA_STREAM_MAX_SECONDS` | `300` (app SSE connection lifetime before reconnect) |
 | `NOVITA_USER_AGENT` | `tts-app/1.0` |
 
 Octane settings (`OCTANE_SERVER`, `OCTANE_HOST`, `OCTANE_PORT`, etc.) are documented in `.env.example`.
@@ -99,6 +102,22 @@ Turns are stored in the `translation_turns` table and keyed by an anonymous encr
 Autoplay uses a browser FIFO queue ordered by submission time. Later turns wait for earlier ones; failed turns are skipped. If the browser blocks autoplay, a **Play now** control appears for that turn.
 
 The `translations:prune` command removes expired turns and orphaned audio files; it is scheduled hourly in `routes/console.php`.
+
+## Progressive translation (SSE relay)
+
+Novita chat completions are still consumed as SSE inside the queue worker. Chunks are persisted on the turn (`translation` / `stream_debug`). The browser does **not** talk to Novita directly.
+
+For each in-flight turn, the owning visitor can open:
+
+`GET /translations/{workflow}/stream`
+
+That application SSE feed emits idempotent snapshots (`snapshot` / `terminal`), plus `heartbeat` keep-alives and a bounded `reconnect` close after `NOVITA_STREAM_MAX_SECONDS`. `EventSource` reconnects and reads the latest database snapshot — there is no separate event-log table.
+
+`NOVITA_TIMEOUT` still applies to the outbound Novita HTTP client. Raising it is how you allow longer Novita streams; the app SSE relay only delivers chunks already received and stored by the worker.
+
+Livewire keeps a slower `wire:poll` fallback (5s) so missed or dropped browser streams still converge. On a `terminal` event the page performs a canonical Livewire refresh so audio URLs and FIFO playback stay authoritative.
+
+Because each SSE connection holds an Octane worker for its lifetime, feeds are visitor-owned, heartbeat regularly, and self-terminate after the configured max duration.
 
 Manual prune:
 

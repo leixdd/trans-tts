@@ -277,6 +277,7 @@ class TranslationWorkflowStore
      *     stream_debug: string|null,
      *     worker_logs: string|null,
      *     audio_url: string|null,
+     *     stream_url: string|null,
      *     error: string|null,
      *     created_at: string
      * }
@@ -286,6 +287,31 @@ class TranslationWorkflowStore
         $workflow = $this->requireOwned($id, $visitorId);
 
         return $this->toPublicPayload($workflow);
+    }
+
+    /**
+     * Ownership-checked progressive snapshot for the browser SSE relay.
+     *
+     * @return array{
+     *     id: string,
+     *     status: string,
+     *     translation: string|null,
+     *     error: string|null,
+     *     terminal: bool
+     * }
+     */
+    public function streamSnapshot(string $id, string $visitorId): array
+    {
+        $workflow = $this->requireOwned($id, $visitorId);
+        $terminal = in_array($workflow['status'], ['completed', 'failed'], true);
+
+        return [
+            'id' => $workflow['id'],
+            'status' => $workflow['status'],
+            'translation' => $workflow['translation'],
+            'error' => $workflow['error'],
+            'terminal' => $terminal,
+        ];
     }
 
     /**
@@ -299,6 +325,7 @@ class TranslationWorkflowStore
      *     stream_debug: string|null,
      *     worker_logs: string|null,
      *     audio_url: string|null,
+     *     stream_url: string|null,
      *     error: string|null,
      *     created_at: string
      * }>
@@ -388,12 +415,15 @@ class TranslationWorkflowStore
      *     stream_debug: string|null,
      *     worker_logs: string|null,
      *     audio_url: string|null,
+     *     stream_url: string|null,
      *     error: string|null,
      *     created_at: string
      * }
      */
     private function toPublicPayload(array $workflow): array
     {
+        $inFlight = in_array($workflow['status'], ['queued', 'translating', 'synthesizing'], true);
+
         return [
             'id' => $workflow['id'],
             'status' => $workflow['status'],
@@ -403,6 +433,9 @@ class TranslationWorkflowStore
             'worker_logs' => $workflow['worker_logs'],
             'audio_url' => $workflow['status'] === 'completed'
                 ? $this->signedAudioUrl($workflow['id'])
+                : null,
+            'stream_url' => $inFlight
+                ? route('translations.stream', ['workflow' => $workflow['id']])
                 : null,
             'error' => $workflow['error'],
             'created_at' => $workflow['created_at'],
