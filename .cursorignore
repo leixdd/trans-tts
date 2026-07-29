@@ -1,0 +1,71 @@
+# ============================================
+# Laravel .cursorignore
+# ============================================
+# Excludes secrets, dependencies, and generated/runtime files from
+# Cursor indexing and AI context. Syntax matches .gitignore.
+
+# -------------------------------------------
+# Secrets and credentials
+# -------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+auth.json
+storage/*.key
+
+# -------------------------------------------
+# Dependencies
+# -------------------------------------------
+vendor/
+node_modules/
+
+# -------------------------------------------
+# Storage & runtime
+# -------------------------------------------
+storage/framework/cache/
+storage/framework/sessions/
+storage/framework/testing/
+storage/framework/views/
+storage/logs/
+storage/pail/
+bootstrap/cache/
+
+# -------------------------------------------
+# Frontend build output
+# -------------------------------------------
+public/build/
+public/hot
+public/storage
+public/fonts-manifest.dev.json
+
+# -------------------------------------------
+# Generated / tool caches
+# -------------------------------------------
+_ide_helper*.php
+.phpstorm.meta.php
+.phpunit.cache/
+.phpunit.result.cache
+.phpactor.json
+
+# -------------------------------------------
+# Local databases
+# -------------------------------------------
+database/*.sqlite
+database/*.sqlite-journal
+
+# -------------------------------------------
+# OS / IDE noise
+# -------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+.fleet/
+.nova/
+.zed/
