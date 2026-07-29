@@ -6,7 +6,7 @@ Public chat-style web app that accepts source text in any language, translates i
 
 ## Requirements
 
-- PHP 8.3+
+- PHP 8.4+
 - [Composer](https://getcomposer.org/)
 - [Bun](https://bun.sh/) — **never use npm or Node.js** for frontend tooling in this project
 - SQLite (default) or another Laravel-supported database
