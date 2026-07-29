@@ -4,7 +4,7 @@ Guidance for AI agents working in this repository.
 
 ## Project
 
-- **App:** Public multi-target chat translation page with Fish Audio TTS via AIProvider (target languages ja/en/zh/ko, queued turns, anonymous history, app SSE progress relay + poll fallback, browser FIFO autoplay with queue-gated custom play/pause controls; see [README.md](README.md) for setup).
+- **App:** Public multi-target chat translation page with Fish Audio TTS via AIProvider (target languages ja/en/zh/ko/ceb, queued turns, anonymous history, app SSE progress relay + poll fallback, browser FIFO autoplay with queue-gated custom play/pause controls; see [README.md](README.md) for setup).
 - **Stack:** Laravel 13, Livewire 4, Octane (FrankenPHP), Pest, Pint, Larastan (level 7)
 - **Layout:** Standard Laravel (not domain-driven). Keep new code in the standard folders.
 - **Package manager (JS):** Use **bun** only. Never use npm or nodejs.

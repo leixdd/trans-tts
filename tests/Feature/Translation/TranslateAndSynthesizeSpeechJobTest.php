@@ -131,6 +131,45 @@ it('uses the Korean system prompt and still synthesizes speech for non-Japanese 
     });
 });
 
+it('uses the Cebuano system prompt and synthesizes speech for Cebuano targets', function () {
+    fakeAIProviders('Kumusta mga higala');
+
+    $store = app(TranslationWorkflowStore::class);
+    $workflow = $store->create('session-a', 'Hello friends', 'ceb');
+
+    (new TranslateAndSynthesizeSpeech($workflow['id']))->handle(
+        $store,
+        app(AIProviderTranslationService::class),
+        app(AIProviderSpeechService::class),
+    );
+
+    $completed = $store->find($workflow['id']);
+
+    expect($completed['status'])->toBe('completed')
+        ->and($completed['target_language'])->toBe('ceb')
+        ->and($completed['translation'])->toBe('Kumusta mga higala')
+        ->and($completed['audio_path'])->not->toBeNull();
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'chat/completions')) {
+            return false;
+        }
+
+        $messages = $request->data()['messages'] ?? [];
+        $system = $messages[0]['content'] ?? '';
+
+        return is_string($system) && str_contains($system, 'Cebuano');
+    });
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'fish-audio-s2-pro-text-to-speech')) {
+            return false;
+        }
+
+        return ($request->data()['text'] ?? null) === 'Kumusta mga higala';
+    });
+});
+
 it('marks the workflow failed with a safe message when translation HTTP fails', function () {
     Http::fake([
         'https://api.aiprovider.test/openai/v1/chat/completions' => Http::response('error', 502),
