@@ -1,18 +1,9 @@
 <?php
 
-namespace Tests\Feature;
+use App\Livewire\TranslationWorkspace;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
-
-class ExampleTest extends TestCase
-{
-    use RefreshDatabase;
-
-    public function test_returns_a_successful_response(): void
-    {
-        $response = $this->get('/');
-
-        $response->assertOk();
-    }
-}
+it('returns a successful response for home', function () {
+    $this->get('/')
+        ->assertOk()
+        ->assertSeeLivewire(TranslationWorkspace::class);
+});

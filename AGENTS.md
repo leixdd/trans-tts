@@ -4,9 +4,11 @@ Guidance for AI agents working in this repository.
 
 ## Project
 
-- **Stack:** Laravel 13, Livewire 4, Pest, Pint, Larastan (level 7)
+- **App:** Public English→Japanese translation page with Fish Audio TTS via Novita (queued workflow; see [README.md](README.md) for setup).
+- **Stack:** Laravel 13, Livewire 4, Octane (FrankenPHP), Pest, Pint, Larastan (level 7)
 - **Layout:** Standard Laravel (not domain-driven). Keep new code in the standard folders.
 - **Package manager (JS):** Use **bun** only. Never use npm or nodejs.
+- **Runtime (local/Docker):** Octane web + `queue:work` + `schedule:work` (hourly `translations:prune`).
 
 ## Before Changing Code
 

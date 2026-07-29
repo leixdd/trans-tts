@@ -35,4 +35,18 @@ return [
         ],
     ],
 
+    'novita' => [
+        'api_key' => env('NOVITA_API_KEY'),
+        'chat_base_url' => env('NOVITA_CHAT_BASE_URL', 'https://api.novita.ai/openai/v1'),
+        'tts_endpoint' => env(
+            'NOVITA_TTS_ENDPOINT',
+            'https://api.novita.ai/v3/fish-audio-s2-pro-text-to-speech',
+        ),
+        'translation_model' => env('NOVITA_TRANSLATION_MODEL', 'google/gemma-4-31b-it'),
+        'fish_reference_id' => env('NOVITA_FISH_REFERENCE_ID'),
+        'timeout' => (int) env('NOVITA_TIMEOUT', 60),
+        'retention_minutes' => (int) env('NOVITA_RETENTION_MINUTES', 60),
+        'user_agent' => env('NOVITA_USER_AGENT', 'tts-app/1.0'),
+    ],
+
 ];

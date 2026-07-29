@@ -1,0 +1,99 @@
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "${OCTANE_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      OCTANE_SERVER: frankenphp
+      OCTANE_HOST: 0.0.0.0
+      OCTANE_PORT: 8000
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /app/database/database.sqlite
+      CACHE_STORE: ${CACHE_STORE:-database}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      SESSION_DRIVER: ${SESSION_DRIVER:-database}
+    volumes:
+      - sqlite-data:/app/database
+      - app-storage:/app/storage/app
+    command: ["octane:frankenphp", "--host=0.0.0.0", "--port=8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "php -r \"exit(str_contains(@file_get_contents('http://127.0.0.1:8000/up') ?: '', 'ok') ? 0 : 1);\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  queue:
+    build:
+      context: .
+    command: ["queue:work", "--sleep=1", "--tries=3", "--timeout=120"]
+    env_file:
+      - .env
+    environment:
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /app/database/database.sqlite
+      CACHE_STORE: ${CACHE_STORE:-database}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      SESSION_DRIVER: ${SESSION_DRIVER:-database}
+    volumes:
+      - sqlite-data:/app/database
+      - app-storage:/app/storage/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      app:
+        condition: service_started
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: .
+    command: ["schedule:work"]
+    env_file:
+      - .env
+    environment:
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /app/database/database.sqlite
+      CACHE_STORE: ${CACHE_STORE:-database}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      SESSION_DRIVER: ${SESSION_DRIVER:-database}
+    volumes:
+      - sqlite-data:/app/database
+      - app-storage:/app/storage/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      app:
+        condition: service_started
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkdir -p /app/database /app/storage/app/private/translation-audio
+        touch /app/database/database.sqlite
+        php artisan migrate --force
+    env_file:
+      - .env
+    environment:
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /app/database/database.sqlite
+    volumes:
+      - sqlite-data:/app/database
+      - app-storage:/app/storage/app
+    restart: "no"
+
+volumes:
+  sqlite-data:
+  app-storage:
