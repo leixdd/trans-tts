@@ -3,20 +3,6 @@
     data-translation-workspace
     @if ($this->hasInFlightTurns) wire:poll.5s="pollStatus" @endif
 >
-    <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-            <p class="text-sm font-medium tracking-wide text-teal-800 uppercase">
-                Any language → your target
-            </p>
-            <h1 class="mt-1 text-3xl font-semibold tracking-tight text-stone-900 sm:text-4xl">
-                Translate &amp; Speak
-            </h1>
-            <p class="mt-2 max-w-xl text-stone-600">
-                Chat-style translation with speech playback history. Choose a target language, then translate and speak.
-            </p>
-        </div>
-    </header>
-
     <div
         class="flex items-center justify-end rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5"
         role="toolbar"
