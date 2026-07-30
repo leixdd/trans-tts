@@ -73,7 +73,7 @@ class TranslationWorkspace extends Component
 
     public function toggleDebugLogs(): void
     {
-        if (! $this->debugToolbarEnabled) {
+        if (! $this->debugToolbarEnabled()) {
             return;
         }
 
@@ -82,7 +82,7 @@ class TranslationWorkspace extends Component
 
     public function selectDebugTurn(string $turnId): void
     {
-        if (! $this->debugToolbarEnabled) {
+        if (! $this->debugToolbarEnabled()) {
             return;
         }
 
