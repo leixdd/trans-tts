@@ -73,11 +73,19 @@ class TranslationWorkspace extends Component
 
     public function toggleDebugLogs(): void
     {
+        if (! $this->debugToolbarEnabled) {
+            return;
+        }
+
         $this->showDebugLogs = ! $this->showDebugLogs;
     }
 
     public function selectDebugTurn(string $turnId): void
     {
+        if (! $this->debugToolbarEnabled) {
+            return;
+        }
+
         $this->debugTurnId = $turnId;
         $this->showDebugLogs = true;
     }
@@ -89,6 +97,12 @@ class TranslationWorkspace extends Component
     public function languageOptions(): array
     {
         return app(TranslationLanguageCatalog::class)->options();
+    }
+
+    #[Computed]
+    public function debugToolbarEnabled(): bool
+    {
+        return (bool) config('translation.debug_toolbar_enabled', true);
     }
 
     #[Computed]

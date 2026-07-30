@@ -192,6 +192,8 @@ it('polls in-flight turns to completed state and dispatches FIFO audio events', 
 });
 
 it('toggles debug log sections via the debug icon', function () {
+    config(['translation.debug_toolbar_enabled' => true]);
+
     Livewire::test(TranslationWorkspace::class)
         ->assertSet('showDebugLogs', false)
         ->assertSee('aria-label="Debug controls"', false)
@@ -205,6 +207,27 @@ it('toggles debug log sections via the debug icon', function () {
         ->assertSet('showDebugLogs', false)
         ->assertDontSee('Worker debug logs')
         ->assertDontSee('AIProvider stream debug');
+});
+
+it('hides the debug toolbar and no-ops debug actions when disabled via config', function () {
+    config(['translation.debug_toolbar_enabled' => false]);
+
+    $visitorId = '77777777-7777-4777-8777-777777777777';
+    $store = app(TranslationWorkflowStore::class);
+    $turn = $store->create($visitorId, 'Hidden debug');
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->assertDontSee('aria-label="Debug controls"', false)
+        ->assertDontSee('>Debug</button>', false)
+        ->assertDontSee('Worker debug logs')
+        ->assertDontSee('AIProvider stream debug')
+        ->call('toggleDebugLogs')
+        ->assertSet('showDebugLogs', false)
+        ->assertDontSee('Worker debug logs')
+        ->call('selectDebugTurn', $turn['id'])
+        ->assertSet('showDebugLogs', false)
+        ->assertSet('debugTurnId', null);
 });
 
 it('keeps composer empty after submit and surfaces failure in the thread', function () {

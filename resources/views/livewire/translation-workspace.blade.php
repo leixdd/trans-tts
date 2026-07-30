@@ -3,26 +3,28 @@
     data-translation-workspace
     @if ($this->hasInFlightTurns) wire:poll.5s="pollStatus" @endif
 >
-    <div
-        class="flex items-center justify-end rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5"
-        role="toolbar"
-        aria-label="Debug controls"
-    >
-        <button
-            type="button"
-            wire:click="toggleDebugLogs"
-            title="{{ $showDebugLogs ? 'Hide debug logs' : 'Show debug logs' }}"
-            aria-label="{{ $showDebugLogs ? 'Hide debug logs' : 'Show debug logs' }}"
-            aria-pressed="{{ $showDebugLogs ? 'true' : 'false' }}"
-            @class([
-                'inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800',
-                'border-teal-300 bg-teal-100 text-teal-900' => $showDebugLogs,
-                'border-stone-300 bg-white text-stone-700 hover:bg-stone-100 hover:text-stone-900' => ! $showDebugLogs,
-            ])
+    @if ($this->debugToolbarEnabled)
+        <div
+            class="flex items-center justify-end rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5"
+            role="toolbar"
+            aria-label="Debug controls"
         >
-            <x-lucide-icon :name="$showDebugLogs ? 'eye-off' : 'bug'" class="size-4 shrink-0 text-current" />
-        </button>
-    </div>
+            <button
+                type="button"
+                wire:click="toggleDebugLogs"
+                title="{{ $showDebugLogs ? 'Hide debug logs' : 'Show debug logs' }}"
+                aria-label="{{ $showDebugLogs ? 'Hide debug logs' : 'Show debug logs' }}"
+                aria-pressed="{{ $showDebugLogs ? 'true' : 'false' }}"
+                @class([
+                    'inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800',
+                    'border-teal-300 bg-teal-100 text-teal-900' => $showDebugLogs,
+                    'border-stone-300 bg-white text-stone-700 hover:bg-stone-100 hover:text-stone-900' => ! $showDebugLogs,
+                ])
+            >
+                <x-lucide-icon :name="$showDebugLogs ? 'eye-off' : 'bug'" class="size-4 shrink-0 text-current" />
+            </button>
+        </div>
+    @endif
 
     <section
         data-translation-chat
@@ -84,13 +86,15 @@
                                     </span>
                                 </div>
 
-                                <button
-                                    type="button"
-                                    wire:click="selectDebugTurn('{{ $turn['id'] }}')"
-                                    class="text-[11px] font-medium text-stone-500 hover:text-teal-800"
-                                >
-                                    Debug
-                                </button>
+                                @if ($this->debugToolbarEnabled)
+                                    <button
+                                        type="button"
+                                        wire:click="selectDebugTurn('{{ $turn['id'] }}')"
+                                        class="text-[11px] font-medium text-stone-500 hover:text-teal-800"
+                                    >
+                                        Debug
+                                    </button>
+                                @endif
                             </div>
 
                             @if (in_array($turn['status'], ['queued', 'translating', 'synthesizing'], true))
@@ -242,7 +246,7 @@
         </form>
     </section>
 
-    @if ($showDebugLogs)
+    @if ($this->debugToolbarEnabled && $showDebugLogs)
         @php($debug = $this->debugTurn)
         <div class="grid gap-4 lg:grid-cols-2">
             <section
