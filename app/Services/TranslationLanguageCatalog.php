@@ -68,14 +68,31 @@ class TranslationLanguageCatalog
     }
 
     /**
-     * Resolve Fish Audio reference id for the language, falling back to the global default.
+     * Optional language-specific Fish Audio voice override, or null when unset.
      */
-    public function fishReferenceId(string $code): string
+    public function fishReferenceOverride(string $code): ?string
     {
         $entry = $this->entry($code);
         $override = $entry['fish_reference_id'] ?? null;
 
         if (is_string($override) && $override !== '') {
+            return $override;
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve Fish Audio reference id for the language, falling back to the global default.
+     *
+     * Legacy / no-visitor path only. Visitor defaults are applied via
+     * TranslationSpeakerCatalog::resolveEffectiveReferenceId() at turn capture.
+     */
+    public function fishReferenceId(string $code): string
+    {
+        $override = $this->fishReferenceOverride($code);
+
+        if ($override !== null) {
             return $override;
         }
 

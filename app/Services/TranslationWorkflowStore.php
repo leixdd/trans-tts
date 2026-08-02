@@ -23,6 +23,7 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     target_language: string,
+     *     speaker_reference_id: string|null,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -33,8 +34,12 @@ class TranslationWorkflowStore
      *     expires_at: string
      * }
      */
-    public function create(string $visitorId, string $sourceText, ?string $targetLanguage = null): array
-    {
+    public function create(
+        string $visitorId,
+        string $sourceText,
+        ?string $targetLanguage = null,
+        ?string $speakerReferenceId = null,
+    ): array {
         if ($visitorId === '') {
             throw new RuntimeException('A visitor id is required to create a translation turn.');
         }
@@ -48,6 +53,7 @@ class TranslationWorkflowStore
             'status' => 'queued',
             'source_text' => $sourceText,
             'target_language' => $language,
+            'speaker_reference_id' => $this->normalizeSpeakerReferenceId($speakerReferenceId),
             'translation' => null,
             'stream_debug' => null,
             'worker_logs' => null,
@@ -68,6 +74,7 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     target_language: string,
+     *     speaker_reference_id: string|null,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -102,6 +109,7 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     target_language: string,
+     *     speaker_reference_id: string|null,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -252,6 +260,7 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     target_language: string,
+     *     speaker_reference_id: string|null,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -276,7 +285,7 @@ class TranslationWorkflowStore
     }
 
     /**
-     * Session-scoped polling payload for the UI (never includes audio_path).
+     * Session-scoped polling payload for the UI (never includes audio_path or speaker_reference_id).
      *
      * @return array{
      *     id: string,
@@ -412,6 +421,7 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     target_language: string,
+     *     speaker_reference_id: string|null,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -444,6 +454,7 @@ class TranslationWorkflowStore
         $catalog = app(TranslationLanguageCatalog::class);
         $targetLanguage = $catalog->normalize($workflow['target_language']);
 
+        // Intentionally omit speaker_reference_id — private operational field only.
         return [
             'id' => $workflow['id'],
             'status' => $workflow['status'],
@@ -471,6 +482,7 @@ class TranslationWorkflowStore
      *     status: string,
      *     source_text: string,
      *     target_language: string,
+     *     speaker_reference_id: string|null,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -492,6 +504,7 @@ class TranslationWorkflowStore
             'status' => $turn->status,
             'source_text' => $turn->source_text,
             'target_language' => $catalog->normalize($turn->target_language ?? null),
+            'speaker_reference_id' => $this->normalizeSpeakerReferenceId($turn->speaker_reference_id),
             'translation' => $turn->translation,
             'stream_debug' => $turn->stream_debug,
             'worker_logs' => $turn->worker_logs,
@@ -501,6 +514,17 @@ class TranslationWorkflowStore
             'updated_at' => $turn->updated_at?->toIso8601String() ?? '',
             'expires_at' => $turn->expires_at->toIso8601String(),
         ];
+    }
+
+    private function normalizeSpeakerReferenceId(?string $speakerReferenceId): ?string
+    {
+        if (! is_string($speakerReferenceId)) {
+            return null;
+        }
+
+        $trimmed = trim($speakerReferenceId);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     private function retentionDays(): int

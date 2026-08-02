@@ -26,7 +26,7 @@ php artisan key:generate
 |----------|---------|
 | `APP_KEY` | Laravel encryption key |
 | `AI_PROVIDER_API_KEY` | AIProvider API key for translation and TTS |
-| `AI_PROVIDER_FISH_REFERENCE_ID` | Server-configured Fish Audio voice reference |
+| `AI_PROVIDER_FISH_REFERENCE_ID` | System-default Fish Audio voice (used when no language override or visitor custom ID applies) |
 
 ### Optional (defaults in `config/services.php`)
 
@@ -97,11 +97,21 @@ Shared volumes persist the SQLite database and private WAV files under `storage/
 
 ## Chat input and history
 
-In the source textarea, **Enter** submits Translate & Speak; **Shift+Enter** inserts a newline. The target language select next to the submit button defaults to Japanese and is remembered for the browser session. Each assistant bubble shows the turn’s target language.
+In the source textarea, **Enter** submits Translate & Speak; **Shift+Enter** inserts a newline. The target language select next to the submit button defaults to Japanese and is remembered for the browser session (`translation_target_language`). A compact **speaker settings** control sits beside the language selector: visitors choose **System default** or **Custom reference ID**. The speaker choice uses the same Laravel session lifecycle (`translation_speaker_mode`, `translation_speaker_custom_reference_id`). Each assistant bubble shows the turn’s target language.
+
+Custom reference IDs are validated locally (required when in custom mode, bounded length, alphanumeric token format); there is no provider-side entitlement preflight. Syntactically valid but unknown IDs may fail asynchronously during TTS synthesis.
+
+On submit, the effective Fish Audio voice resolves in this order:
+
+1. Target-language `fish_reference_id` override from `config/translation_languages.php`
+2. Visitor-selected default (system or custom)
+3. Global `AI_PROVIDER_FISH_REFERENCE_ID`
+
+The resolved reference ID is captured privately on each turn (`speaker_reference_id`) before queue dispatch; changing speaker settings later does not alter already queued turns. Reference IDs are omitted from chat history, public turn payloads, user-facing errors, and worker logs.
 
 Turns are stored in the `translation_turns` table (including `target_language`) and keyed by an anonymous encrypted `tts_visitor` cookie (not a user account). Each visitor keeps at most `AI_PROVIDER_HISTORY_LIMIT` turns for `AI_PROVIDER_RETENTION_DAYS`. Private WAV files live under `storage/app/private/translation-audio` and are streamed only through signed URLs for the owning visitor.
 
-While a turn is in flight, the assistant bubble shows a writing indicator. When translated text arrives (SSE snapshot or Livewire morph), it types in grapheme-by-grapheme (`resources/js/translation-typing.js`). History restored on first paint is shown instantly (no replay). Per-language translation prompts and optional Fish Audio voice overrides live in `config/translation_languages.php`.
+While a turn is in flight, the assistant bubble shows a writing indicator. When translated text arrives (SSE snapshot or Livewire morph), it types in grapheme-by-grapheme (`resources/js/translation-typing.js`). History restored on first paint is shown instantly (no replay). Per-language translation prompts and optional Fish Audio voice overrides live in `config/translation_languages.php`. Session-scoped speaker modes and custom-ID rules live in `config/translation_speakers.php`.
 
 ## Audio playback
 
@@ -144,9 +154,19 @@ bun test resources/js  # FIFO playback + typing reveal (Bun)
 bun run build          # production asset build
 bun run test:e2e:install   # once — installs Playwright Chromium
 bun run test:e2e           # browser Play/Stop acceptance (starts webServer)
+bun run test:e2e tests/e2e/speaker-setting.spec.js  # speaker settings acceptance
 ```
 
-Playwright e2e tests seed a deterministic playback fixture, start `php artisan serve` on port 8765, and assert Play/Stop icon visibility and FIFO stop-and-advance behavior. Override the base URL with `PLAYWRIGHT_BASE_URL`; set `CI=1` to disable server reuse and enable one retry. Failure artifacts land under `tests/e2e/test-results/`; HTML report under `tests/e2e/playwright-report/`.
+Playwright e2e tests seed a deterministic playback fixture (run `php artisan migrate` first so the dev database includes all schema columns), start `php artisan serve` on port 8765, and assert Play/Stop icon visibility and FIFO stop-and-advance behavior. Override the base URL with `PLAYWRIGHT_BASE_URL`; set `CI=1` to disable server reuse and enable one retry. Failure artifacts land under `tests/e2e/test-results/`; HTML report under `tests/e2e/playwright-report/`.
+
+Focused speaker backend coverage:
+
+```bash
+vendor/bin/pest tests/Unit/Services/TranslationSpeakerCatalogTest.php \
+  tests/Feature/Translation/StartTranslationWorkflowTest.php \
+  tests/Feature/Translation/TranslationWorkspaceLivewireTest.php \
+  tests/Feature/Translation/TranslateAndSynthesizeSpeechJobTest.php
+```
 
 PHPStan may need extra memory on constrained hosts: `vendor/bin/phpstan analyse --memory-limit=512M`.
 

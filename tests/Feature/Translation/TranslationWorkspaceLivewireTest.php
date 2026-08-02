@@ -3,6 +3,7 @@
 use App\Jobs\TranslateAndSynthesizeSpeech;
 use App\Livewire\TranslationWorkspace;
 use App\Services\AnonymousVisitor;
+use App\Services\TranslationSpeakerCatalog;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
@@ -228,6 +229,78 @@ it('hides the debug toolbar and no-ops debug actions when disabled via config', 
         ->call('selectDebugTurn', $turn['id'])
         ->assertSet('showDebugLogs', false)
         ->assertSet('debugTurnId', null);
+});
+
+it('defaults speaker mode to system and exposes the settings toggle', function () {
+    Livewire::test(TranslationWorkspace::class)
+        ->assertSet('speakerMode', TranslationSpeakerCatalog::MODE_SYSTEM)
+        ->assertSee('data-speaker-settings-toggle', false)
+        ->assertSee('System default')
+        ->assertSee('Custom reference ID');
+});
+
+it('persists speaker mode and custom reference id in session across remount', function () {
+    Livewire::test(TranslationWorkspace::class)
+        ->set('speakerMode', TranslationSpeakerCatalog::MODE_CUSTOM)
+        ->set('customReferenceId', 'session-voice-01')
+        ->assertSet('speakerMode', TranslationSpeakerCatalog::MODE_CUSTOM)
+        ->assertSet('customReferenceId', 'session-voice-01');
+
+    expect(session('translation_speaker_mode'))->toBe(TranslationSpeakerCatalog::MODE_CUSTOM)
+        ->and(session('translation_speaker_custom_reference_id'))->toBe('session-voice-01');
+
+    Livewire::test(TranslationWorkspace::class)
+        ->assertSet('speakerMode', TranslationSpeakerCatalog::MODE_CUSTOM)
+        ->assertSet('customReferenceId', 'session-voice-01');
+});
+
+it('rejects submit with custom mode and empty custom reference id without dispatching', function () {
+    Queue::fake();
+
+    Livewire::test(TranslationWorkspace::class)
+        ->set('text', 'Hello')
+        ->set('speakerMode', TranslationSpeakerCatalog::MODE_CUSTOM)
+        ->set('customReferenceId', '')
+        ->call('submit')
+        ->assertHasErrors(['customReferenceId']);
+
+    Queue::assertNothingPushed();
+});
+
+it('rejects submit with invalid custom reference id without dispatching', function () {
+    Queue::fake();
+
+    Livewire::test(TranslationWorkspace::class)
+        ->set('text', 'Hello')
+        ->set('speakerMode', TranslationSpeakerCatalog::MODE_CUSTOM)
+        ->set('customReferenceId', 'bad id')
+        ->call('submit')
+        ->assertHasErrors(['customReferenceId']);
+
+    Queue::assertNothingPushed();
+});
+
+it('omits speaker reference id from public turn payloads', function () {
+    Queue::fake();
+
+    $visitorId = '88888888-8888-4888-8888-888888888888';
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->set('text', 'Hello')
+        ->set('speakerMode', TranslationSpeakerCatalog::MODE_CUSTOM)
+        ->set('customReferenceId', 'public-hidden-voice')
+        ->call('submit');
+
+    $turns = app(TranslationWorkflowStore::class)->listForVisitor($visitorId);
+
+    expect($turns)->toHaveCount(1)
+        ->and($turns[0])->not->toHaveKey('speaker_reference_id')
+        ->and(collect($turns[0])->keys())->not->toContain('speaker_reference_id');
+
+    $public = app(TranslationWorkflowStore::class)->publicStatus($turns[0]['id'], $visitorId);
+
+    expect($public)->not->toHaveKey('speaker_reference_id');
 });
 
 it('keeps composer empty after submit and surfaces failure in the thread', function () {
