@@ -240,8 +240,8 @@
                             :aria-expanded="open ? 'true' : 'false'"
                             aria-controls="speaker-settings-panel"
                             aria-haspopup="dialog"
-                            title="Speaker settings"
-                            aria-label="Speaker settings"
+                            title="Audio settings"
+                            aria-label="Audio settings"
                             @class([
                                 'inline-flex size-10 shrink-0 items-center justify-center rounded-lg border shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800',
                                 'border-teal-300 bg-teal-50 text-teal-900' => $speakerMode === 'custom',
@@ -258,64 +258,109 @@
                             id="speaker-settings-panel"
                             data-speaker-settings-panel
                             role="dialog"
-                            aria-label="Speaker settings"
+                            aria-label="Audio settings"
                             style="display: none;"
                             class="absolute right-0 bottom-full z-20 mb-2 w-72 rounded-lg border border-stone-200 bg-white p-3 shadow-lg sm:w-80"
                         >
-                            <p class="text-xs font-semibold tracking-wide text-stone-800 uppercase">
-                                Default speaker
-                            </p>
-                            <p class="mt-1 text-xs leading-relaxed text-stone-500">
-                                Used when the target language has no voice override.
-                            </p>
+                            <div data-output-device-section>
+                                <p class="text-xs font-semibold tracking-wide text-stone-800 uppercase">
+                                    Output device
+                                </p>
+                                <p class="mt-1 text-xs leading-relaxed text-stone-500">
+                                    Routes this app’s TTS playback. Preference stays in this browser only.
+                                </p>
 
-                            <fieldset class="mt-3 space-y-2">
-                                <legend class="sr-only">Speaker mode</legend>
-                                @foreach ($this->speakerOptions as $option)
-                                    <label
-                                        wire:key="speaker-mode-{{ $option['mode'] }}"
-                                        @class([
-                                            'flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-2 text-sm text-stone-800 transition hover:bg-stone-50',
-                                            'border-teal-300 bg-teal-50/60' => $speakerMode === $option['mode'],
-                                            'border-stone-200' => $speakerMode !== $option['mode'],
-                                        ])
+                                <p
+                                    class="mt-2 text-sm text-stone-800"
+                                    data-output-device-status="system"
+                                >
+                                    <span class="sr-only">Current output device:</span>
+                                    <span data-output-device-label>System default</span>
+                                </p>
+
+                                <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                                    <button
+                                        type="button"
+                                        data-output-device-choose
+                                        class="inline-flex items-center justify-center rounded-md border border-teal-700 bg-teal-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800 disabled:cursor-not-allowed disabled:border-stone-300 disabled:bg-stone-300 disabled:text-stone-600"
                                     >
-                                        <input
-                                            type="radio"
-                                            name="speaker-mode"
-                                            value="{{ $option['mode'] }}"
-                                            wire:model.live="speakerMode"
-                                            class="mt-0.5 size-4 border-stone-300 text-teal-800 focus:ring-teal-700/30"
-                                        />
-                                        <span>{{ $option['label'] }}</span>
-                                    </label>
-                                @endforeach
-                            </fieldset>
-
-                            @if ($speakerMode === 'custom')
-                                <div class="mt-3" data-speaker-custom-input>
-                                    <label for="custom-reference-id" class="block text-xs font-medium text-stone-700">
-                                        Custom reference ID
-                                    </label>
-                                    <input
-                                        id="custom-reference-id"
-                                        type="text"
-                                        wire:model.live.debounce.300ms="customReferenceId"
-                                        autocomplete="off"
-                                        spellcheck="false"
-                                        maxlength="128"
-                                        class="mt-1.5 w-full rounded-md border border-stone-300 bg-white px-3 py-2 font-mono text-sm text-stone-900 shadow-sm outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20"
-                                        placeholder="Enter Fish reference ID"
-                                    />
+                                        Choose output device
+                                    </button>
+                                    <button
+                                        type="button"
+                                        data-output-device-reset
+                                        disabled
+                                        aria-disabled="true"
+                                        class="inline-flex items-center justify-center rounded-md border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
+                                    >
+                                        Use system default
+                                    </button>
                                 </div>
-                            @endif
 
-                            @error('speakerMode')
-                                <p class="mt-2 text-xs text-red-700" role="alert">{{ $message }}</p>
-                            @enderror
-                            @error('customReferenceId')
-                                <p class="mt-2 text-xs text-red-700" role="alert">{{ $message }}</p>
-                            @enderror
+                                <p
+                                    data-output-device-notice
+                                    class="mt-2 hidden text-xs leading-relaxed text-amber-800"
+                                    role="status"
+                                    aria-live="polite"
+                                ></p>
+                            </div>
+
+                            <div class="mt-4 border-t border-stone-100 pt-3">
+                                <p class="text-xs font-semibold tracking-wide text-stone-800 uppercase">
+                                    Default speaker
+                                </p>
+                                <p class="mt-1 text-xs leading-relaxed text-stone-500">
+                                    Used when the target language has no voice override.
+                                </p>
+
+                                <fieldset class="mt-3 space-y-2">
+                                    <legend class="sr-only">Speaker mode</legend>
+                                    @foreach ($this->speakerOptions as $option)
+                                        <label
+                                            wire:key="speaker-mode-{{ $option['mode'] }}"
+                                            @class([
+                                                'flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-2 text-sm text-stone-800 transition hover:bg-stone-50',
+                                                'border-teal-300 bg-teal-50/60' => $speakerMode === $option['mode'],
+                                                'border-stone-200' => $speakerMode !== $option['mode'],
+                                            ])
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="speaker-mode"
+                                                value="{{ $option['mode'] }}"
+                                                wire:model.live="speakerMode"
+                                                class="mt-0.5 size-4 border-stone-300 text-teal-800 focus:ring-teal-700/30"
+                                            />
+                                            <span>{{ $option['label'] }}</span>
+                                        </label>
+                                    @endforeach
+                                </fieldset>
+
+                                @if ($speakerMode === 'custom')
+                                    <div class="mt-3" data-speaker-custom-input>
+                                        <label for="custom-reference-id" class="block text-xs font-medium text-stone-700">
+                                            Custom reference ID
+                                        </label>
+                                        <input
+                                            id="custom-reference-id"
+                                            type="text"
+                                            wire:model.live.debounce.300ms="customReferenceId"
+                                            autocomplete="off"
+                                            spellcheck="false"
+                                            maxlength="128"
+                                            class="mt-1.5 w-full rounded-md border border-stone-300 bg-white px-3 py-2 font-mono text-sm text-stone-900 shadow-sm outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20"
+                                            placeholder="Enter Fish reference ID"
+                                        />
+                                    </div>
+                                @endif
+
+                                @error('speakerMode')
+                                    <p class="mt-2 text-xs text-red-700" role="alert">{{ $message }}</p>
+                                @enderror
+                                @error('customReferenceId')
+                                    <p class="mt-2 text-xs text-red-700" role="alert">{{ $message }}</p>
+                                @enderror
+                            </div>
                         </div>
                     </div>
 

@@ -16,7 +16,12 @@
  * States (`data-playback-state`): idle | playing
  * Labels: "Play speech" (idle) / "Stop speech" (playing)
  * Stop settles the active turn and advances FIFO (no resumable pause).
+ *
+ * Output routing: every new Audio awaits applySink before play(); device changes
+ * apply to the next clip only (active clip is never rerouted).
  */
+
+import { applySink } from './audio-output-device.js';
 
 const playback = {
     order: [],
@@ -209,13 +214,14 @@ function clearAudioListeners(audio) {
     audio.onerror = null;
 }
 
-function play(id, url, { autoplay = false } = {}) {
+async function play(id, url, { autoplay = false } = {}) {
     if (playback.audio) {
         clearAudioListeners(playback.audio);
         playback.audio.pause();
         playback.audio = null;
     }
 
+    // Gate concurrent tryPlay / manual starts while the sink is applied.
     playback.playing = true;
     playback.playingId = id;
     playback.blocked = false;
@@ -242,6 +248,14 @@ function play(id, url, { autoplay = false } = {}) {
     audio.addEventListener('error', finish);
 
     refreshControls();
+
+    // Prefer the selected sink before any audible start (no burst on system default).
+    await applySink(audio);
+
+    // Stop / reset may have discarded this element while the sink was applying.
+    if (playback.audio !== audio) {
+        return;
+    }
 
     const attempt = audio.play();
     if (attempt && typeof attempt.then === 'function') {

@@ -8,7 +8,7 @@ Guidance for AI agents working in this repository.
 - **Stack:** Laravel 13, Livewire 4, Octane (FrankenPHP), Pest, Pint, Larastan (level 7)
 - **Layout:** Standard Laravel (not domain-driven). Keep new code in the standard folders.
 - **Package manager (JS):** Use **bun** only. Never use npm or nodejs.
-- **Playback client:** FIFO coordinator lives in `resources/js/translation-playback.js` (wired from `resources/js/app.js`). Ordering is browser-side; workers may complete out of order.
+- **Playback client:** FIFO coordinator lives in `resources/js/translation-playback.js` (wired from `resources/js/app.js`). Ordering is browser-side; workers may complete out of order. Each new TTS clip awaits `AudioOutputDevice.applySink` before `play()`; output preference is browser-local only (`resources/js/audio-output-device.js`, `localStorage` key `tts_audio_output_device`).
 - **Runtime (local/Docker):** Octane web + `queue:work` + `schedule:work` (hourly `translations:prune`).
 
 ## Before Changing Code
@@ -49,8 +49,9 @@ composer types:check   # PHPStan / Larastan
 composer test          # lint check + types + Pest
 php artisan test       # Pest only
 bun install            # JS deps (never npm)
-bun test resources/js  # FIFO playback coordinator tests
-bun run test:e2e       # Playwright Play/Stop browser acceptance
+bun test resources/js  # FIFO playback, output routing, typing reveal tests
+bun run test:e2e       # Playwright playback + audio settings acceptance
+bun run test:e2e tests/e2e/output-device.spec.js  # output device routing only
 bun run build          # Vite build
 ```
 

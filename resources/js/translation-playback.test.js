@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import {
+    init as initAudioOutputDevice,
+    chooseOutputDevice,
+    resetToSystemDefault,
+    getState as getOutputDeviceState,
+} from './audio-output-device.js';
+import {
     syncOrder,
     markReady,
     markFailed,
@@ -19,10 +25,14 @@ class MockAudio {
     /** @type {MockAudio[]} */
     static instances = [];
 
+    /** @type {{ method: string, url: string, deviceId?: string }[]} */
+    static callOrder = [];
+
     /** @param {string} url */
     constructor(url) {
         this.url = url;
         this.paused = true;
+        this.sinkId = null;
         /** @type {Record<string, Function[]>} */
         this.listeners = {};
         /** @type {'resolve' | 'reject'} */
@@ -32,6 +42,12 @@ class MockAudio {
 
     /** @type {'resolve' | 'reject'} */
     static nextPlayBehavior = 'resolve';
+
+    /** @param {string} deviceId */
+    async setSinkId(deviceId) {
+        MockAudio.callOrder.push({ method: 'setSinkId', url: this.url, deviceId });
+        this.sinkId = deviceId;
+    }
 
     /**
      * @param {string} event
@@ -45,6 +61,7 @@ class MockAudio {
     }
 
     play() {
+        MockAudio.callOrder.push({ method: 'play', url: this.url });
         this.paused = false;
         if (this.playBehavior === 'reject') {
             return Promise.reject(new Error('autoplay blocked'));
@@ -217,6 +234,7 @@ function installDom() {
 
 beforeEach(() => {
     MockAudio.instances = [];
+    MockAudio.callOrder = [];
     MockAudio.nextPlayBehavior = 'resolve';
     globalThis.Audio = MockAudio;
     installDom();
@@ -358,6 +376,7 @@ describe('FIFO autoplay coordinator', () => {
         markReady('turn-2', 'https://example.test/2.wav');
         await Promise.resolve();
         await Promise.resolve();
+        await Promise.resolve();
 
         expect(getState().blocked).toBe(true);
         expect(getState().playing).toBe(false);
@@ -387,5 +406,138 @@ describe('FIFO autoplay coordinator', () => {
 
         expect(getState().played).toContain('turn-1');
         expect(getState().playingId).toBe('turn-2');
+    });
+});
+
+describe('output routing integration', () => {
+    /** @type {Map<string, string>} */
+    let outputDeviceStorage = new Map();
+
+    /** @returns {{ setPickerResult: (fn: () => Promise<{ deviceId: string, label: string }>) => void }} */
+    function installOutputDeviceSupport() {
+        outputDeviceStorage = new Map();
+
+        Object.defineProperty(globalThis, 'localStorage', {
+            configurable: true,
+            value: {
+                getItem: (key) => outputDeviceStorage.get(key) ?? null,
+                setItem: (key, value) => {
+                    outputDeviceStorage.set(key, value);
+                },
+                removeItem: (key) => {
+                    outputDeviceStorage.delete(key);
+                },
+                clear: () => {
+                    outputDeviceStorage.clear();
+                },
+            },
+        });
+
+        Object.defineProperty(globalThis, 'window', {
+            configurable: true,
+            value: { isSecureContext: true },
+        });
+
+        /** @type {() => Promise<{ deviceId: string, label: string }>} */
+        let pickerResult = async () => ({ deviceId: 'sink-device-a', label: 'Test Earphones' });
+
+        const mediaDevices = {
+            selectAudioOutput: async () => pickerResult(),
+            /** @param {() => Promise<{ deviceId: string, label: string }>} fn */
+            setPickerResult(fn) {
+                pickerResult = fn;
+            },
+        };
+
+        Object.defineProperty(globalThis, 'navigator', {
+            configurable: true,
+            value: { mediaDevices },
+        });
+
+        class MockMediaElement {}
+        MockMediaElement.prototype.setSinkId = async function setSinkId() {};
+        Object.defineProperty(globalThis, 'HTMLMediaElement', {
+            configurable: true,
+            value: MockMediaElement,
+        });
+
+        initAudioOutputDevice();
+
+        return mediaDevices;
+    }
+
+    beforeEach(async () => {
+        const mediaDevices = installOutputDeviceSupport();
+        await chooseOutputDevice();
+        expect(getOutputDeviceState().status).toBe('selected');
+
+        mediaDevices.setPickerResult(async () => ({
+            deviceId: 'sink-device-b',
+            label: 'Alternate Output',
+        }));
+    });
+
+    test('applySink runs before play on the same audio element', async () => {
+        syncOrder(['turn-1']);
+        markReady('turn-1', 'https://example.test/1.wav');
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(MockAudio.instances).toHaveLength(1);
+        expect(MockAudio.instances[0].sinkId).toBe('sink-device-a');
+
+        const sinkIndex = MockAudio.callOrder.findIndex((entry) => entry.method === 'setSinkId');
+        const playIndex = MockAudio.callOrder.findIndex((entry) => entry.method === 'play');
+        expect(sinkIndex).toBeGreaterThanOrEqual(0);
+        expect(playIndex).toBeGreaterThanOrEqual(0);
+        expect(playIndex).toBeGreaterThan(sinkIndex);
+    });
+
+    test('device change applies to the next clip only, not the active clip', async () => {
+        syncOrder(['turn-1', 'turn-2']);
+        markReady('turn-1', 'https://example.test/1.wav');
+        markReady('turn-2', 'https://example.test/2.wav');
+        await Promise.resolve();
+
+        const firstClip = MockAudio.instances[0];
+        expect(firstClip.sinkId).toBe('sink-device-a');
+
+        await chooseOutputDevice();
+        expect(getOutputDeviceState().deviceId).toBe('sink-device-b');
+        expect(firstClip.sinkId).toBe('sink-device-a');
+
+        firstClip.emit('ended');
+        await Promise.resolve();
+
+        expect(MockAudio.instances).toHaveLength(2);
+        expect(MockAudio.instances[1].sinkId).toBe('sink-device-b');
+    });
+
+    test('FIFO order and stop-and-advance remain unchanged with output routing', async () => {
+        syncOrder(['turn-1', 'turn-2']);
+        markReady('turn-1', 'https://example.test/1.wav');
+        markReady('turn-2', 'https://example.test/2.wav');
+        await Promise.resolve();
+
+        expect(getState().playingId).toBe('turn-1');
+
+        toggleManual('turn-1');
+        await Promise.resolve();
+
+        expect(getState().played).toContain('turn-1');
+        expect(getState().playingId).toBe('turn-2');
+    });
+
+    test('reset to system default skips setSinkId on subsequent clips', async () => {
+        resetToSystemDefault();
+        MockAudio.callOrder = [];
+
+        syncOrder(['turn-3']);
+        markReady('turn-3', 'https://example.test/3.wav');
+        await Promise.resolve();
+
+        expect(MockAudio.callOrder.some((entry) => entry.method === 'setSinkId')).toBe(false);
+        expect(MockAudio.instances[0].sinkId).toBeNull();
     });
 });
