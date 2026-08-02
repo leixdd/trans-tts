@@ -26,3 +26,9 @@ yarn-error.log
 **/caddy
 frankenphp
 frankenphp-worker.php
+
+/tests/e2e/test-results/
+/tests/e2e/playwright-report/
+/tests/e2e/.playback-fixture.json
+/test-results/
+/playwright-report/

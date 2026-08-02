@@ -123,7 +123,7 @@ function installDom() {
                     },
                 },
             };
-            const pauseIcon = {
+            const stopIcon = {
                 classList: {
                     /** @type {Set<string>} */
                     tokens: new Set(['hidden']),
@@ -196,8 +196,8 @@ function installDom() {
                     if (sel === '[data-playback-icon-play]') {
                         return playIcon;
                     }
-                    if (sel === '[data-playback-icon-pause]') {
-                        return pauseIcon;
+                    if (sel === '[data-playback-icon-stop]') {
+                        return stopIcon;
                     }
 
                     return null;
@@ -310,22 +310,45 @@ describe('FIFO autoplay coordinator', () => {
         expect(MockAudio.instances).toHaveLength(1);
     });
 
-    test('pause toggle on the active turn does not start another turn', async () => {
+    test('stop toggle settles the active turn and advances FIFO', async () => {
         syncOrder(['turn-1', 'turn-2']);
         markReady('turn-1', 'https://example.test/1.wav');
         markReady('turn-2', 'https://example.test/2.wav');
         await Promise.resolve();
 
-        toggleManual('turn-1');
-        expect(getState().paused).toBe(true);
         expect(getState().playingId).toBe('turn-1');
-        expect(controlState('turn-1')).toBe('paused');
+        expect(controlState('turn-1')).toBe('playing');
         expect(MockAudio.instances).toHaveLength(1);
+        expect(MockAudio.instances[0].paused).toBe(false);
 
         toggleManual('turn-1');
         await Promise.resolve();
-        expect(getState().paused).toBe(false);
+
+        expect(getState().played).toContain('turn-1');
+        expect(getState().playingId).toBe('turn-2');
+        expect(controlState('turn-1')).toBe('idle');
+        expect(MockAudio.instances).toHaveLength(2);
+        expect(MockAudio.instances[0].paused).toBe(true);
+    });
+
+    test('stop on the active turn does not leave a resumable paused clip', async () => {
+        syncOrder(['turn-1']);
+        markReady('turn-1', 'https://example.test/1.wav');
+        await Promise.resolve();
+
+        toggleManual('turn-1');
+        await Promise.resolve();
+
+        expect(getState().playing).toBe(false);
+        expect(getState().playingId).toBeNull();
+        expect(getState().played).toContain('turn-1');
+        expect('paused' in getState()).toBe(false);
+
+        toggleManual('turn-1');
+        await Promise.resolve();
+
         expect(getState().playingId).toBe('turn-1');
+        expect(MockAudio.instances).toHaveLength(2);
     });
 
     test('autoplay rejection marks blocked and resume continues FIFO', async () => {

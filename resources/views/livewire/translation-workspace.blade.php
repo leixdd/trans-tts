@@ -158,13 +158,17 @@
                                                 aria-label="Play speech"
                                                 class="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium text-stone-800 shadow-sm transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
                                             >
-                                                <span data-playback-icon-play class="inline-flex items-center gap-2">
-                                                    <x-lucide-icon name="play" class="size-4 shrink-0" aria-hidden="true" />
-                                                    Play
+                                                <span data-playback-icon-play>
+                                                    <span class="inline-flex items-center gap-2">
+                                                        <x-lucide-icon name="play" class="size-4 shrink-0" aria-hidden="true" />
+                                                        Play
+                                                    </span>
                                                 </span>
-                                                <span data-playback-icon-pause class="hidden inline-flex items-center gap-2">
-                                                    <x-lucide-icon name="pause" class="size-4 shrink-0" aria-hidden="true" />
-                                                    Pause
+                                                <span data-playback-icon-stop class="hidden">
+                                                    <span class="inline-flex items-center gap-2">
+                                                        <x-lucide-icon name="square-stop" class="size-4 shrink-0" aria-hidden="true" />
+                                                        Stop
+                                                    </span>
                                                 </span>
                                             </button>
                                         </div>

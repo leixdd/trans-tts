@@ -107,7 +107,7 @@ While a turn is in flight, the assistant bubble shows a writing indicator. When 
 
 Autoplay uses a browser FIFO queue ordered by submission time (`resources/js/translation-playback.js`). Parallel workers may finish later chats first; the browser buffers those clips until every earlier turn has finished playing or failed. Only one clip plays at a time.
 
-Completed turns show a custom **Play** / **Pause** control (no native `<audio controls>` / volume UI). That control appears only when the turn’s audio is ready **and** every earlier turn is settled. While another clip is playing, other turns’ controls stay disabled so manual playback cannot jump the FIFO queue. Restored history is playable manually but does not autoplay again on page load. If the browser blocks autoplay, a **Play now** control appears for the blocked turn and resumes the same ordered queue.
+Completed turns show a custom **Play** / **Stop** control (no native `<audio controls>` / volume UI). That control appears only when the turn’s audio is ready **and** every earlier turn is settled. While another clip is playing, other turns’ controls stay disabled so manual playback cannot jump the FIFO queue. **Stop** settles the active clip and advances the FIFO queue to the next turn (not a resumable pause). Restored history is playable manually but does not autoplay again on page load. If the browser blocks autoplay, a **Play now** control appears for the blocked turn and resumes the same ordered queue.
 
 The `translations:prune` command removes expired turns and orphaned audio files; it is scheduled hourly in `routes/console.php`.
 
@@ -142,7 +142,11 @@ composer lint:check    # Pint dry-run
 composer types:check   # PHPStan (512M memory limit)
 bun test resources/js  # FIFO playback + typing reveal (Bun)
 bun run build          # production asset build
+bun run test:e2e:install   # once — installs Playwright Chromium
+bun run test:e2e           # browser Play/Stop acceptance (starts webServer)
 ```
+
+Playwright e2e tests seed a deterministic playback fixture, start `php artisan serve` on port 8765, and assert Play/Stop icon visibility and FIFO stop-and-advance behavior. Override the base URL with `PLAYWRIGHT_BASE_URL`; set `CI=1` to disable server reuse and enable one retry. Failure artifacts land under `tests/e2e/test-results/`; HTML report under `tests/e2e/playwright-report/`.
 
 PHPStan may need extra memory on constrained hosts: `vendor/bin/phpstan analyse --memory-limit=512M`.
 

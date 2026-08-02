@@ -3,8 +3,8 @@
  *
  * Presentation contract (Blade hooks):
  * - [data-playback-shell="{id}"]  — control shell; JS toggles `.hidden`
- * - [data-playback-toggle="{id}"] — play/pause button; JS toggles disabled + aria/label
- * - [data-playback-icon-play] / [data-playback-icon-pause] — icon visibility inside toggle
+ * - [data-playback-toggle="{id}"] — play/stop button; JS toggles disabled + aria/label
+ * - [data-playback-icon-play] / [data-playback-icon-stop] — icon visibility inside toggle
  * - [data-audio-src="{url}"]      — signed audio URL on the shell (server-rendered)
  * - [data-autoplay-blocked="{id}"] / [data-resume-autoplay="{id}"] — existing recovery UI
  *
@@ -12,6 +12,10 @@
  * - Visible when the turn has audio and every earlier turn is settled (played or failed).
  * - Disabled while another turn's clip is actively playing (manual cannot interrupt).
  * - Restored history is hydrated as settled (no autoplay); in-session ready turns autoplay in order.
+ *
+ * States (`data-playback-state`): idle | playing
+ * Labels: "Play speech" (idle) / "Stop speech" (playing)
+ * Stop settles the active turn and advances FIFO (no resumable pause).
  */
 
 const playback = {
@@ -21,7 +25,6 @@ const playback = {
     played: new Set(),
     autoplayEligible: new Set(),
     playing: false,
-    paused: false,
     blocked: false,
     playingId: null,
     audio: null,
@@ -66,12 +69,8 @@ function controlEnabled(id) {
 }
 
 function controlState(id) {
-    if (playback.playingId === id && playback.playing && !playback.paused) {
+    if (playback.playingId === id && playback.playing) {
         return 'playing';
-    }
-
-    if (playback.playingId === id && playback.paused) {
-        return 'paused';
     }
 
     return 'idle';
@@ -96,18 +95,18 @@ function refreshControls() {
             ?? shell.querySelector('[data-playback-toggle]');
         if (toggle && typeof toggle === 'object' && 'disabled' in toggle) {
             toggle.disabled = !enabled;
-            const label = state === 'playing' ? 'Pause speech' : 'Play speech';
+            const label = state === 'playing' ? 'Stop speech' : 'Play speech';
             toggle.setAttribute('aria-label', label);
             toggle.setAttribute('title', label);
         }
 
         const playIcon = shell.querySelector('[data-playback-icon-play]');
-        const pauseIcon = shell.querySelector('[data-playback-icon-pause]');
+        const stopIcon = shell.querySelector('[data-playback-icon-stop]');
         if (playIcon) {
             playIcon.classList.toggle('hidden', state === 'playing');
         }
-        if (pauseIcon) {
-            pauseIcon.classList.toggle('hidden', state !== 'playing');
+        if (stopIcon) {
+            stopIcon.classList.toggle('hidden', state !== 'playing');
         }
     });
 }
@@ -176,7 +175,7 @@ function markFailed(id) {
 }
 
 function tryPlay() {
-    if (playback.playing || playback.blocked || playback.paused) {
+    if (playback.playing || playback.blocked) {
         refreshControls();
         return;
     }
@@ -218,7 +217,6 @@ function play(id, url, { autoplay = false } = {}) {
     }
 
     playback.playing = true;
-    playback.paused = false;
     playback.playingId = id;
     playback.blocked = false;
 
@@ -233,7 +231,6 @@ function play(id, url, { autoplay = false } = {}) {
         clearAudioListeners(audio);
         playback.played.add(id);
         playback.playing = false;
-        playback.paused = false;
         playback.playingId = null;
         playback.audio = null;
         setBlockedUi(false, id);
@@ -259,7 +256,6 @@ function play(id, url, { autoplay = false } = {}) {
                 }
 
                 playback.playing = false;
-                playback.paused = false;
                 // Keep playingId for blocked recovery targeting when autoplay was attempted.
                 if (autoplay) {
                     playback.blocked = true;
@@ -305,48 +301,30 @@ function resumeFromUser(turnId) {
     tryPlay();
 }
 
-function pauseManual(id) {
-    if (playback.playingId !== id || !playback.audio || !playback.playing || playback.paused) {
+/**
+ * Halt and discard the active clip, settle the turn, and advance FIFO.
+ * Does not retain a resumable pause position.
+ */
+function stopManual(id) {
+    if (playback.playingId !== id || !playback.audio || !playback.playing) {
         return;
     }
 
-    playback.audio.pause();
-    playback.paused = true;
+    const audio = playback.audio;
+    clearAudioListeners(audio);
+    audio.pause();
+
+    playback.played.add(id);
+    playback.playing = false;
+    playback.playingId = null;
+    playback.audio = null;
+    setBlockedUi(false, id);
     refreshControls();
-}
-
-function resumeManual(id) {
-    if (playback.playingId !== id || !playback.audio || !playback.paused) {
-        return;
-    }
-
-    const attempt = playback.audio.play();
-    playback.paused = false;
-    playback.playing = true;
-    refreshControls();
-
-    if (attempt && typeof attempt.then === 'function') {
-        attempt.catch(() => {
-            playback.blocked = true;
-            playback.paused = true;
-            setBlockedUi(true, id);
-            refreshControls();
-        });
-    }
+    tryPlay();
 }
 
 function playManual(id) {
     if (!controlEnabled(id)) {
-        return;
-    }
-
-    if (playback.playingId === id && playback.playing && !playback.paused) {
-        pauseManual(id);
-        return;
-    }
-
-    if (playback.playingId === id && playback.paused) {
-        resumeManual(id);
         return;
     }
 
@@ -369,6 +347,11 @@ function toggleManual(id) {
         return;
     }
 
+    if (playback.playingId === id && playback.playing) {
+        stopManual(id);
+        return;
+    }
+
     playManual(id);
 }
 
@@ -380,7 +363,6 @@ function getState() {
         played: [...playback.played],
         autoplayEligible: [...playback.autoplayEligible],
         playing: playback.playing,
-        paused: playback.paused,
         blocked: playback.blocked,
         playingId: playback.playingId,
     };
@@ -398,7 +380,6 @@ function reset() {
     playback.played.clear();
     playback.autoplayEligible.clear();
     playback.playing = false;
-    playback.paused = false;
     playback.blocked = false;
     playback.playingId = null;
     playback.audio = null;
@@ -432,8 +413,6 @@ export {
     markFailed,
     resumeFromUser,
     playManual,
-    pauseManual,
-    resumeManual,
     toggleManual,
     hydrateFromDom,
     refreshControls,
