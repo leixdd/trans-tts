@@ -227,6 +227,98 @@
                         @endforeach
                     </select>
 
+                    <div
+                        class="relative"
+                        data-speaker-settings
+                        x-data="{ open: false }"
+                        @keydown.escape.window="open = false"
+                    >
+                        <button
+                            type="button"
+                            data-speaker-settings-toggle
+                            @click="open = ! open"
+                            :aria-expanded="open ? 'true' : 'false'"
+                            aria-controls="speaker-settings-panel"
+                            aria-haspopup="dialog"
+                            title="Speaker settings"
+                            aria-label="Speaker settings"
+                            @class([
+                                'inline-flex size-10 shrink-0 items-center justify-center rounded-lg border shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800',
+                                'border-teal-300 bg-teal-50 text-teal-900' => $speakerMode === 'custom',
+                                'border-stone-300 bg-white text-stone-700 hover:bg-stone-100 hover:text-stone-900' => $speakerMode !== 'custom',
+                            ])
+                        >
+                            <x-lucide-icon name="audio-lines" class="size-4 shrink-0 text-current" aria-hidden="true" />
+                        </button>
+
+                        <div
+                            x-show="open"
+                            x-transition.opacity.duration.150ms
+                            @click.outside="open = false"
+                            id="speaker-settings-panel"
+                            data-speaker-settings-panel
+                            role="dialog"
+                            aria-label="Speaker settings"
+                            style="display: none;"
+                            class="absolute right-0 bottom-full z-20 mb-2 w-72 rounded-lg border border-stone-200 bg-white p-3 shadow-lg sm:w-80"
+                        >
+                            <p class="text-xs font-semibold tracking-wide text-stone-800 uppercase">
+                                Default speaker
+                            </p>
+                            <p class="mt-1 text-xs leading-relaxed text-stone-500">
+                                Used when the target language has no voice override.
+                            </p>
+
+                            <fieldset class="mt-3 space-y-2">
+                                <legend class="sr-only">Speaker mode</legend>
+                                @foreach ($this->speakerOptions as $option)
+                                    <label
+                                        wire:key="speaker-mode-{{ $option['mode'] }}"
+                                        @class([
+                                            'flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-2 text-sm text-stone-800 transition hover:bg-stone-50',
+                                            'border-teal-300 bg-teal-50/60' => $speakerMode === $option['mode'],
+                                            'border-stone-200' => $speakerMode !== $option['mode'],
+                                        ])
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="speaker-mode"
+                                            value="{{ $option['mode'] }}"
+                                            wire:model.live="speakerMode"
+                                            class="mt-0.5 size-4 border-stone-300 text-teal-800 focus:ring-teal-700/30"
+                                        />
+                                        <span>{{ $option['label'] }}</span>
+                                    </label>
+                                @endforeach
+                            </fieldset>
+
+                            @if ($speakerMode === 'custom')
+                                <div class="mt-3" data-speaker-custom-input>
+                                    <label for="custom-reference-id" class="block text-xs font-medium text-stone-700">
+                                        Custom reference ID
+                                    </label>
+                                    <input
+                                        id="custom-reference-id"
+                                        type="text"
+                                        wire:model.live.debounce.300ms="customReferenceId"
+                                        autocomplete="off"
+                                        spellcheck="false"
+                                        maxlength="128"
+                                        class="mt-1.5 w-full rounded-md border border-stone-300 bg-white px-3 py-2 font-mono text-sm text-stone-900 shadow-sm outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20"
+                                        placeholder="Enter Fish reference ID"
+                                    />
+                                </div>
+                            @endif
+
+                            @error('speakerMode')
+                                <p class="mt-2 text-xs text-red-700" role="alert">{{ $message }}</p>
+                            @enderror
+                            @error('customReferenceId')
+                                <p class="mt-2 text-xs text-red-700" role="alert">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+
                     <button
                         type="submit"
                         wire:loading.attr="disabled"
@@ -245,6 +337,12 @@
                 <p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>
             @enderror
             @error('targetLanguage')
+                <p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>
+            @enderror
+            @error('speakerMode')
+                <p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>
+            @enderror
+            @error('customReferenceId')
                 <p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>
             @enderror
         </form>

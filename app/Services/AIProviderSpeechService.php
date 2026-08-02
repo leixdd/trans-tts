@@ -18,9 +18,11 @@ class AIProviderSpeechService
      *
      * Stateless and Octane-safe: no request-specific mutable properties.
      *
+     * @param  string|null  $referenceId  Explicit Fish reference captured on the turn; null uses legacy language→global fallback
+     *
      * @throws RuntimeException
      */
-    public function synthesize(string $text, string $targetLanguage): string
+    public function synthesize(string $text, string $targetLanguage, ?string $referenceId = null): string
     {
         $language = $this->languages->normalize($targetLanguage);
 
@@ -30,7 +32,7 @@ class AIProviderSpeechService
         }
 
         try {
-            $referenceId = $this->languages->fishReferenceId($language);
+            $resolvedReferenceId = $this->resolveReferenceId($language, $referenceId);
         } catch (Throwable $exception) {
             throw new RuntimeException($exception->getMessage(), 0, $exception);
         }
@@ -59,7 +61,7 @@ class AIProviderSpeechService
                 ->post($endpoint, [
                     'text' => $text,
                     'format' => 'wav',
-                    'reference_id' => $referenceId,
+                    'reference_id' => $resolvedReferenceId,
                 ]);
         } catch (ConnectionException $exception) {
             throw new RuntimeException('AIProvider speech request failed to connect.', 0, $exception);
@@ -78,5 +80,19 @@ class AIProviderSpeechService
         }
 
         return $audio;
+    }
+
+    /**
+     * Prefer an explicit turn-captured reference; legacy null falls back via language catalog.
+     *
+     * @throws Throwable
+     */
+    private function resolveReferenceId(string $language, ?string $explicitReferenceId): string
+    {
+        if (is_string($explicitReferenceId) && $explicitReferenceId !== '') {
+            return $explicitReferenceId;
+        }
+
+        return $this->languages->fishReferenceId($language);
     }
 }

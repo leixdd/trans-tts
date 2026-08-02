@@ -91,7 +91,13 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
                 $store->appendWorkerLog($this->workflowId, 'Starting Fish Audio speech synthesis…');
                 $store->markStatus($this->workflowId, 'synthesizing');
                 // Always synthesize the translated text — never the source text.
-                $audio = $speech->synthesize($translation, $fresh['target_language']);
+                // Pass the immutable turn-captured speaker; null keeps legacy language→global fallback.
+                $speakerReferenceId = $fresh['speaker_reference_id'] ?? null;
+                $audio = $speech->synthesize(
+                    $translation,
+                    $fresh['target_language'],
+                    is_string($speakerReferenceId) ? $speakerReferenceId : null,
+                );
                 $store->storeAudio($this->workflowId, $audio);
                 $store->appendWorkerLog(
                     $this->workflowId,
@@ -166,9 +172,10 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
             return $exception::class;
         }
 
-        // Keep logs useful without dumping secrets or huge payloads.
+        // Keep logs useful without dumping secrets, reference IDs, or huge payloads.
         $summary = preg_replace('/Bearer\s+\S+/i', 'Bearer [redacted]', $message) ?? $message;
         $summary = preg_replace('/sk-[A-Za-z0-9_-]+/', '[redacted-key]', $summary) ?? $summary;
+        $summary = preg_replace('/reference[_ ]?id["\']?\s*[:=]\s*["\']?[A-Za-z0-9_-]+/i', 'reference_id=[redacted]', $summary) ?? $summary;
 
         return mb_strlen($summary) > 200
             ? mb_substr($summary, 0, 200).'…'

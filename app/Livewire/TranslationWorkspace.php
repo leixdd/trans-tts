@@ -6,6 +6,7 @@ use App\Actions\StartTranslationWorkflow;
 use App\Http\Requests\StartTranslationRequest;
 use App\Services\AnonymousVisitor;
 use App\Services\TranslationLanguageCatalog;
+use App\Services\TranslationSpeakerCatalog;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Computed;
@@ -19,9 +20,17 @@ class TranslationWorkspace extends Component
 {
     private const SESSION_TARGET_LANGUAGE_KEY = 'translation_target_language';
 
+    private const SESSION_SPEAKER_MODE_KEY = 'translation_speaker_mode';
+
+    private const SESSION_CUSTOM_REFERENCE_ID_KEY = 'translation_speaker_custom_reference_id';
+
     public string $text = '';
 
     public string $targetLanguage = 'ja';
+
+    public string $speakerMode = TranslationSpeakerCatalog::MODE_SYSTEM;
+
+    public ?string $customReferenceId = null;
 
     public bool $showDebugLogs = false;
 
@@ -54,9 +63,19 @@ class TranslationWorkspace extends Component
         AnonymousVisitor $visitors,
         TranslationWorkflowStore $store,
         TranslationLanguageCatalog $languages,
+        TranslationSpeakerCatalog $speakers,
     ): void {
         $stored = session(self::SESSION_TARGET_LANGUAGE_KEY);
         $this->targetLanguage = $languages->normalize(is_string($stored) ? $stored : null);
+
+        $storedMode = session(self::SESSION_SPEAKER_MODE_KEY);
+        $storedCustom = session(self::SESSION_CUSTOM_REFERENCE_ID_KEY);
+        $selection = $speakers->normalizeSelection(
+            is_string($storedMode) ? $storedMode : null,
+            is_string($storedCustom) ? $storedCustom : null,
+        );
+        $this->speakerMode = $selection['mode'];
+        $this->customReferenceId = $selection['custom_reference_id'];
 
         $visitorId = $visitors->idFrom(request());
         $this->refreshTurns($store, $visitorId);
@@ -69,6 +88,21 @@ class TranslationWorkspace extends Component
         }
 
         session([self::SESSION_TARGET_LANGUAGE_KEY => $this->targetLanguage]);
+    }
+
+    public function updatedSpeakerMode(TranslationSpeakerCatalog $speakers): void
+    {
+        if (! $speakers->isSupportedMode($this->speakerMode)) {
+            return;
+        }
+
+        $this->persistSpeakerSelection();
+    }
+
+    public function updatedCustomReferenceId(): void
+    {
+        $this->normalizeCustomReferenceIdProperty();
+        $this->persistSpeakerSelection();
     }
 
     public function toggleDebugLogs(): void
@@ -97,6 +131,15 @@ class TranslationWorkspace extends Component
     public function languageOptions(): array
     {
         return app(TranslationLanguageCatalog::class)->options();
+    }
+
+    /**
+     * @return list<array{mode: string, label: string}>
+     */
+    #[Computed]
+    public function speakerOptions(): array
+    {
+        return app(TranslationSpeakerCatalog::class)->options();
     }
 
     #[Computed]
@@ -155,16 +198,37 @@ class TranslationWorkspace extends Component
         AnonymousVisitor $visitors,
         TranslationLanguageCatalog $languages,
     ): void {
-        $this->validate([
-            'text' => StartTranslationRequest::textRules(),
-            'targetLanguage' => StartTranslationRequest::targetLanguageRules(),
-        ]);
+        $this->normalizeCustomReferenceIdProperty();
 
-        session([self::SESSION_TARGET_LANGUAGE_KEY => $this->targetLanguage]);
+        $this->validate(
+            [
+                'text' => StartTranslationRequest::textRules(),
+                'targetLanguage' => StartTranslationRequest::targetLanguageRules(),
+                'speakerMode' => StartTranslationRequest::speakerModeRules(),
+                'customReferenceId' => StartTranslationRequest::customReferenceIdRules('speakerMode'),
+            ],
+            [
+                'customReferenceId.required_if' => 'A custom speaker reference ID is required.',
+                'customReferenceId.regex' => 'The custom speaker reference ID format is invalid.',
+                'customReferenceId.max' => 'The custom speaker reference ID is too long.',
+            ],
+        );
+
+        session([
+            self::SESSION_TARGET_LANGUAGE_KEY => $this->targetLanguage,
+            self::SESSION_SPEAKER_MODE_KEY => $this->speakerMode,
+            self::SESSION_CUSTOM_REFERENCE_ID_KEY => $this->customReferenceId,
+        ]);
 
         $visitorId = $visitors->idFrom(request());
         $source = $this->text;
-        $started = $start($visitorId, $source, $this->targetLanguage);
+        $started = $start(
+            $visitorId,
+            $source,
+            $this->targetLanguage,
+            $this->speakerMode,
+            $this->customReferenceId,
+        );
 
         $this->text = '';
         $this->debugTurnId = $started['id'];
@@ -183,6 +247,26 @@ class TranslationWorkspace extends Component
     public function render(): View
     {
         return view('livewire.translation-workspace');
+    }
+
+    private function normalizeCustomReferenceIdProperty(): void
+    {
+        if (! is_string($this->customReferenceId)) {
+            $this->customReferenceId = null;
+
+            return;
+        }
+
+        $trimmed = trim($this->customReferenceId);
+        $this->customReferenceId = $trimmed === '' ? null : $trimmed;
+    }
+
+    private function persistSpeakerSelection(): void
+    {
+        session([
+            self::SESSION_SPEAKER_MODE_KEY => $this->speakerMode,
+            self::SESSION_CUSTOM_REFERENCE_ID_KEY => $this->customReferenceId,
+        ]);
     }
 
     private function refreshTurns(TranslationWorkflowStore $store, string $visitorId): void

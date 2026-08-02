@@ -300,6 +300,94 @@ it('fails clearly when the AIProvider API key is missing', function () {
         ->toBe('Translation service is not configured. Please try again later.');
 });
 
+it('sends the captured turn speaker reference id to the TTS request', function () {
+    Http::fake([
+        'https://api.aiprovider.test/openai/v1/chat/completions' => Http::response(
+            fakeAIProviderStreamBody('翻訳'),
+            200,
+            ['Content-Type' => 'text/event-stream'],
+        ),
+        'https://api.aiprovider.test/v3/fish-audio-s2-pro-text-to-speech' => Http::response(
+            fakeWavBytes(),
+            200,
+            ['Content-Type' => 'audio/wav'],
+        ),
+    ]);
+
+    $store = app(TranslationWorkflowStore::class);
+    $workflow = $store->create('session-a', 'Hello', 'ja', 'turn-captured-voice');
+
+    (new TranslateAndSynthesizeSpeech($workflow['id']))->handle(
+        $store,
+        app(AIProviderTranslationService::class),
+        app(AIProviderSpeechService::class),
+    );
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'fish-audio-s2-pro-text-to-speech')) {
+            return false;
+        }
+
+        return ($request->data()['reference_id'] ?? null) === 'turn-captured-voice';
+    });
+});
+
+it('falls back to the global fish reference when turn speaker capture is null', function () {
+    Http::fake([
+        'https://api.aiprovider.test/openai/v1/chat/completions' => Http::response(
+            fakeAIProviderStreamBody('翻訳'),
+            200,
+            ['Content-Type' => 'text/event-stream'],
+        ),
+        'https://api.aiprovider.test/v3/fish-audio-s2-pro-text-to-speech' => Http::response(
+            fakeWavBytes(),
+            200,
+            ['Content-Type' => 'audio/wav'],
+        ),
+    ]);
+
+    $store = app(TranslationWorkflowStore::class);
+    $workflow = $store->create('session-a', 'Hello', 'ja', null);
+
+    (new TranslateAndSynthesizeSpeech($workflow['id']))->handle(
+        $store,
+        app(AIProviderTranslationService::class),
+        app(AIProviderSpeechService::class),
+    );
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'fish-audio-s2-pro-text-to-speech')) {
+            return false;
+        }
+
+        return ($request->data()['reference_id'] ?? null) === 'test-fish-ref';
+    });
+});
+
+it('redacts reference ids from worker logs when synthesis fails', function () {
+    Http::fake([
+        'https://api.aiprovider.test/openai/v1/chat/completions' => Http::response(
+            fakeAIProviderStreamBody('翻訳'),
+            200,
+            ['Content-Type' => 'text/event-stream'],
+        ),
+        'https://api.aiprovider.test/v3/fish-audio-s2-pro-text-to-speech' => Http::response(
+            'reference_id=secret-voice-42 failed',
+            500,
+        ),
+    ]);
+
+    $store = app(TranslationWorkflowStore::class);
+    $workflow = $store->create('session-a', 'Hello', 'ja', 'secret-voice-42');
+
+    runJobToFailure($workflow['id']);
+
+    $failed = $store->find($workflow['id']);
+
+    expect($failed['worker_logs'])->not->toContain('secret-voice-42')
+        ->and($failed['error'])->not->toContain('secret-voice-42');
+});
+
 it('fails clearly when the Fish reference id is missing', function () {
     configureAIProviderForTests(['fish_reference_id' => '']);
 

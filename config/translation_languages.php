@@ -3,8 +3,9 @@
 /**
  * Allow-listed translation target languages (v1).
  *
- * Each entry may override TTS voice via fish_reference_id; null falls back to
- * services.ai_provider.fish_reference_id.
+ * Each entry may override TTS voice via fish_reference_id. When set, that
+ * override wins over the visitor default speaker and the global
+ * services.ai_provider.fish_reference_id. Null means no language override.
  */
 return [
 
