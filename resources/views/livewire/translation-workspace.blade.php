@@ -297,6 +297,20 @@
                                     </button>
                                 </div>
 
+                                <label class="mt-2 block">
+                                    <span class="sr-only">Select output device</span>
+                                    <select
+                                        data-output-device-picker
+                                        class="hidden w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-xs text-stone-800 shadow-sm outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20"
+                                    ></select>
+                                </label>
+
+                                <p
+                                    data-output-device-hint
+                                    class="mt-2 hidden text-xs leading-relaxed text-stone-600"
+                                    role="note"
+                                ></p>
+
                                 <p
                                     data-output-device-notice
                                     class="mt-2 hidden text-xs leading-relaxed text-amber-800"

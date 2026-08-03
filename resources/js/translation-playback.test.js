@@ -443,6 +443,13 @@ describe('output routing integration', () => {
 
         const mediaDevices = {
             selectAudioOutput: async () => pickerResult(),
+            enumerateDevices: async () => [
+                { deviceId: 'sink-device-a', kind: 'audiooutput', label: 'Test Earphones' },
+                { deviceId: 'sink-device-b', kind: 'audiooutput', label: 'Alternate Output' },
+            ],
+            getUserMedia: async () => ({
+                getTracks: () => [{ stop: () => {} }],
+            }),
             /** @param {() => Promise<{ deviceId: string, label: string }>} fn */
             setPickerResult(fn) {
                 pickerResult = fn;

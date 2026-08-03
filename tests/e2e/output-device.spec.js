@@ -34,7 +34,12 @@ async function openAudioSettingsPanel(page) {
 async function installOutputDeviceMocks(page, options = {}) {
         await page.addInitScript((opts) => {
         const supported = opts.supported !== false;
+        const selectionMode = opts.selectionMode ?? 'native';
         const pickerDevice = opts.pickerDevice ?? { deviceId: 'e2e-output-device-1', label: 'E2E Headphones' };
+        const enumeratedDevices = opts.enumeratedDevices ?? [
+            { deviceId: 'e2e-output-device-1', kind: 'audiooutput', label: 'E2E Headphones' },
+            { deviceId: 'e2e-output-device-2', kind: 'audiooutput', label: 'E2E Speakers' },
+        ];
         const sinkBehavior = opts.sinkBehavior ?? 'resolve';
 
         window.__outputDeviceMock = {
@@ -44,13 +49,21 @@ async function installOutputDeviceMocks(page, options = {}) {
         };
 
         if (!supported) {
+            delete HTMLMediaElement.prototype.setSinkId;
             return;
         }
 
-        navigator.mediaDevices.selectAudioOutput = async () => {
-            window.__outputDeviceMock.selectCalls += 1;
-            return pickerDevice;
-        };
+        if (selectionMode === 'native') {
+            navigator.mediaDevices.selectAudioOutput = async () => {
+                window.__outputDeviceMock.selectCalls += 1;
+                return pickerDevice;
+            };
+        }
+
+        navigator.mediaDevices.enumerateDevices = async () => structuredClone(enumeratedDevices);
+        navigator.mediaDevices.getUserMedia = async () => ({
+            getTracks: () => [{ stop: () => {} }],
+        });
 
         const originalSetSinkId = HTMLMediaElement.prototype.setSinkId;
         HTMLMediaElement.prototype.setSinkId = async function setSinkId(deviceId) {
@@ -242,6 +255,33 @@ test.describe('Output device settings', () => {
     });
 });
 
+test.describe('Output device Chromium enumerate fallback', () => {
+    test.beforeEach(async ({ page }) => {
+        await installOutputDeviceMocks(page, { selectionMode: 'enumerate' });
+        await page.goto('/');
+        await expect(page.locator('[data-speaker-settings-toggle]')).toBeVisible({ timeout: 15_000 });
+    });
+
+    test('choose loads speaker list and select saves preference', async ({ page }) => {
+        await openAudioSettingsPanel(page);
+        await page.locator('[data-output-device-choose]').click();
+
+        const picker = page.locator('[data-output-device-picker]');
+        await expect(picker).toBeVisible();
+        await picker.selectOption('e2e-output-device-2');
+
+        await expect(page.locator('[data-output-device-status]')).toHaveAttribute('data-output-device-status', 'selected');
+        await expect(page.locator('[data-output-device-label]')).toHaveText('E2E Speakers');
+        await expect(picker).toHaveClass(/hidden/);
+
+        const stored = await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY);
+        expect(JSON.parse(String(stored))).toEqual({
+            deviceId: 'e2e-output-device-2',
+            label: 'E2E Speakers',
+        });
+    });
+});
+
 test.describe('Output device unsupported state', () => {
     test('shows unavailable label and disabled controls', async ({ page }) => {
         await installOutputDeviceMocks(page, { supported: false });
@@ -251,6 +291,7 @@ test.describe('Output device unsupported state', () => {
 
         await expect(page.locator('[data-output-device-status]')).toHaveAttribute('data-output-device-status', 'unsupported');
         await expect(page.locator('[data-output-device-label]')).toHaveText('Output selection unavailable in this browser');
+        await expect(page.locator('[data-output-device-hint]')).toBeVisible();
         await expect(page.locator('[data-output-device-choose]')).toBeDisabled();
         await expect(page.locator('[data-output-device-reset]')).toBeDisabled();
     });

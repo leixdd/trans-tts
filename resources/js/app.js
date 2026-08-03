@@ -18,8 +18,12 @@ import {
     init as initAudioOutputDevice,
     subscribe as subscribeAudioOutputDevice,
     chooseOutputDevice,
+    prepareOutputDevicePicker,
+    selectOutputDevice,
     resetToSystemDefault,
     getState as getAudioOutputDeviceState,
+    getUnsupportedReason,
+    getSelectionMode,
 } from './audio-output-device.js';
 import { reconcileScroll } from './translation-scroll.js';
 import { reconcileTyping, revealTranslation } from './translation-typing.js';
@@ -49,6 +53,7 @@ function reconcileOutputDeviceUi(snapshot) {
     const chooseBtn = section.querySelector('[data-output-device-choose]');
     const resetBtn = section.querySelector('[data-output-device-reset]');
     const noticeEl = section.querySelector('[data-output-device-notice]');
+    const hintEl = section.querySelector('[data-output-device-hint]');
 
     if (statusEl) {
         statusEl.setAttribute('data-output-device-status', state.status);
@@ -58,11 +63,17 @@ function reconcileOutputDeviceUi(snapshot) {
     if (state.status === 'selected' && typeof state.label === 'string' && state.label !== '') {
         labelText = state.label;
     } else if (state.status === 'unsupported') {
-        labelText = 'Output selection unavailable in this browser';
+        labelText = getUnsupportedReason()?.message ?? 'Output selection unavailable in this browser';
     }
 
     if (labelEl) {
         labelEl.textContent = labelText;
+    }
+
+    if (hintEl) {
+        const unsupportedReason = state.status === 'unsupported' ? getUnsupportedReason() : null;
+        hintEl.textContent = unsupportedReason?.hint ?? '';
+        hintEl.classList.toggle('hidden', unsupportedReason === null);
     }
 
     const unsupported = state.status === 'unsupported';
@@ -79,11 +90,63 @@ function reconcileOutputDeviceUi(snapshot) {
     }
 
     if (noticeEl) {
-        const showNotice =
-            state.status === 'fallback' && typeof state.notice === 'string' && state.notice !== '';
+        const showNotice = typeof state.notice === 'string' && state.notice !== '';
         noticeEl.textContent = showNotice ? state.notice : '';
         noticeEl.classList.toggle('hidden', !showNotice);
     }
+
+    const pickerEl = section.querySelector('[data-output-device-picker]');
+    if (pickerEl instanceof HTMLSelectElement && unsupported) {
+        pickerEl.classList.add('hidden');
+        pickerEl.replaceChildren();
+    }
+}
+
+/**
+ * @param {Element} section
+ */
+async function loadOutputDevicePicker(section) {
+    const chooseBtn = section.querySelector('[data-output-device-choose]');
+    const pickerEl = section.querySelector('[data-output-device-picker]');
+    if (!(pickerEl instanceof HTMLSelectElement)) {
+        return;
+    }
+
+    const originalLabel = chooseBtn instanceof HTMLButtonElement
+        ? chooseBtn.textContent
+        : 'Choose output device';
+
+    if (chooseBtn instanceof HTMLButtonElement) {
+        chooseBtn.disabled = true;
+        chooseBtn.textContent = 'Loading speakers…';
+    }
+
+    const devices = await prepareOutputDevicePicker();
+
+    if (chooseBtn instanceof HTMLButtonElement) {
+        chooseBtn.disabled = false;
+        chooseBtn.textContent = originalLabel ?? 'Choose output device';
+    }
+
+    if (devices.length === 0) {
+        return;
+    }
+
+    pickerEl.replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select a speaker…';
+    pickerEl.append(placeholder);
+
+    for (const device of devices) {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.textContent = device.label;
+        pickerEl.append(option);
+    }
+
+    pickerEl.classList.remove('hidden');
+    pickerEl.focus();
 }
 
 /**
@@ -110,6 +173,16 @@ function bindOutputDeviceUi() {
             }
 
             event.preventDefault();
+
+            if (getSelectionMode() === 'enumerate') {
+                const section = choose.closest('[data-output-device-section]');
+                if (section instanceof Element) {
+                    void loadOutputDevicePicker(section);
+                }
+
+                return;
+            }
+
             void chooseOutputDevice();
 
             return;
@@ -124,6 +197,26 @@ function bindOutputDeviceUi() {
             event.preventDefault();
             resetToSystemDefault();
         }
+    });
+
+    document.addEventListener('change', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement) || !target.matches('[data-output-device-picker]')) {
+            return;
+        }
+
+        const option = target.selectedOptions[0];
+        if (!option || option.value === '') {
+            return;
+        }
+
+        selectOutputDevice({
+            deviceId: option.value,
+            label: option.textContent ?? 'Selected device',
+        });
+
+        target.classList.add('hidden');
+        target.value = '';
     });
 }
 

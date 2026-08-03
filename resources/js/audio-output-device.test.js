@@ -2,11 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
     STORAGE_KEY,
     FALLBACK_NOTICE,
+    PERMISSION_NOTICE,
     isSupported,
+    getUnsupportedReason,
+    getSelectionMode,
     init,
     getState,
     subscribe,
     chooseOutputDevice,
+    prepareOutputDevicePicker,
+    selectOutputDevice,
     resetToSystemDefault,
     applySink,
 } from './audio-output-device.js';
@@ -51,12 +56,26 @@ function installSupportedEnvironment() {
     /** @type {() => Promise<{ deviceId: string, label: string }>} */
     let selectBehavior = async () => ({ deviceId: 'device-a', label: 'Mock Headphones' });
 
+    /** @type {Array<{ deviceId: string, kind: string, label: string }>} */
+    let enumeratedDevices = [
+        { deviceId: 'device-a', kind: 'audiooutput', label: 'Mock Headphones' },
+        { deviceId: 'device-b', kind: 'audiooutput', label: 'Mock Speakers' },
+    ];
+
     const mediaDevices = {
         /** @param {() => Promise<{ deviceId: string, label: string }>} fn */
         setSelectBehavior(fn) {
             selectBehavior = fn;
         },
+        /** @param {Array<{ deviceId: string, kind: string, label: string }>} devices */
+        setEnumeratedDevices(devices) {
+            enumeratedDevices = devices;
+        },
         selectAudioOutput: async () => selectBehavior(),
+        enumerateDevices: async () => structuredClone(enumeratedDevices),
+        getUserMedia: async () => ({
+            getTracks: () => [{ stop: () => {} }],
+        }),
     };
 
     Object.defineProperty(globalThis, 'navigator', {
@@ -142,8 +161,15 @@ afterEach(() => {
 });
 
 describe('AudioOutputDevice capability', () => {
-    test('isSupported is true in secure context with picker and setSinkId', () => {
+    test('isSupported is true in secure context with setSinkId and enumerateDevices', () => {
         expect(isSupported()).toBe(true);
+        expect(getSelectionMode()).toBe('native');
+    });
+
+    test('isSupported is true in Chromium when only setSinkId and enumerateDevices exist', () => {
+        delete env?.mediaDevices.selectAudioOutput;
+        expect(isSupported()).toBe(true);
+        expect(getSelectionMode()).toBe('enumerate');
     });
 
     test('init reports unsupported when APIs are missing', () => {
@@ -151,6 +177,7 @@ describe('AudioOutputDevice capability', () => {
         const state = init();
 
         expect(isSupported()).toBe(false);
+        expect(getUnsupportedReason()?.code).toBe('insecure-context');
         expect(state.status).toBe('unsupported');
         expect(state.deviceId).toBeNull();
     });
@@ -221,6 +248,42 @@ describe('AudioOutputDevice picker behavior', () => {
 
         await chooseOutputDevice();
         expect(getState().deviceId).toBe(prior.deviceId);
+    });
+});
+
+describe('AudioOutputDevice enumerate fallback', () => {
+    test('prepareOutputDevicePicker lists audio outputs without native picker', async () => {
+        delete env?.mediaDevices.selectAudioOutput;
+
+        const devices = await prepareOutputDevicePicker();
+        expect(devices).toEqual([
+            { deviceId: 'device-a', label: 'Mock Headphones' },
+            { deviceId: 'device-b', label: 'Mock Speakers' },
+        ]);
+    });
+
+    test('selectOutputDevice stores enumerated choice', () => {
+        const state = selectOutputDevice({ deviceId: 'device-b', label: 'Mock Speakers' });
+        expect(state.status).toBe('selected');
+        expect(state.deviceId).toBe('device-b');
+        expect(JSON.parse(String(localStorage.getItem(STORAGE_KEY)))).toEqual({
+            deviceId: 'device-b',
+            label: 'Mock Speakers',
+        });
+    });
+
+    test('prepareOutputDevicePicker publishes permission notice when getUserMedia fails', async () => {
+        delete env?.mediaDevices.selectAudioOutput;
+        env?.mediaDevices.setEnumeratedDevices([
+            { deviceId: '', kind: 'audiooutput', label: '' },
+        ]);
+        env.mediaDevices.getUserMedia = async () => {
+            throw new DOMException('denied', 'NotAllowedError');
+        };
+
+        const devices = await prepareOutputDevicePicker();
+        expect(devices).toEqual([]);
+        expect(getState().notice).toBe(PERMISSION_NOTICE);
     });
 });
 

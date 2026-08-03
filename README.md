@@ -119,7 +119,7 @@ Open **Audio settings** beside the language selector. The **Output device** sect
 
 ### Browser support and permissions
 
-- **Chromium success path:** requires a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts) (HTTPS or `localhost`), `navigator.mediaDevices.selectAudioOutput`, and `HTMLMediaElement.setSinkId`.
+- **Chromium success path:** requires a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts) (HTTPS or `localhost`) and `HTMLMediaElement.setSinkId`. Chrome/Brave/Edge list outputs via `enumerateDevices` (one-time microphone permission unlocks labels); Firefox uses the native `selectAudioOutput` picker when available.
 - **User activation:** choosing a device requires a click on **Choose output device**; the browser may prompt for `speaker-selection` permission.
 - **Unsupported browsers** (Safari, Firefox, insecure HTTP): TTS still plays on the OS default; output controls are disabled with an explanatory label.
 
