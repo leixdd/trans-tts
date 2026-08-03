@@ -14,6 +14,17 @@ import {
     reset,
     bindUi,
 } from './translation-playback.js';
+import {
+    init as initAudioOutputDevice,
+    subscribe as subscribeAudioOutputDevice,
+    chooseOutputDevice,
+    prepareOutputDevicePicker,
+    selectOutputDevice,
+    resetToSystemDefault,
+    getState as getAudioOutputDeviceState,
+    getUnsupportedReason,
+    getSelectionMode,
+} from './audio-output-device.js';
 import { reconcileScroll } from './translation-scroll.js';
 import { reconcileTyping, revealTranslation } from './translation-typing.js';
 
@@ -21,6 +32,193 @@ const streams = {
     sources: new Map(),
     refreshing: false,
 };
+
+let outputDeviceUiBound = false;
+
+/**
+ * Paint Output device controls from AudioOutputDevice state.
+ * Safe across Livewire morph — re-queries the current DOM each call.
+ *
+ * @param {{ status: string, deviceId: string|null, label: string|null, notice: string|null }|undefined} snapshot
+ */
+function reconcileOutputDeviceUi(snapshot) {
+    const state = snapshot ?? getAudioOutputDeviceState();
+    const section = document.querySelector('[data-output-device-section]');
+    if (!section) {
+        return;
+    }
+
+    const statusEl = section.querySelector('[data-output-device-status]');
+    const labelEl = section.querySelector('[data-output-device-label]');
+    const chooseBtn = section.querySelector('[data-output-device-choose]');
+    const resetBtn = section.querySelector('[data-output-device-reset]');
+    const noticeEl = section.querySelector('[data-output-device-notice]');
+    const hintEl = section.querySelector('[data-output-device-hint]');
+
+    if (statusEl) {
+        statusEl.setAttribute('data-output-device-status', state.status);
+    }
+
+    let labelText = 'System default';
+    if (state.status === 'selected' && typeof state.label === 'string' && state.label !== '') {
+        labelText = state.label;
+    } else if (state.status === 'unsupported') {
+        labelText = getUnsupportedReason()?.message ?? 'Output selection unavailable in this browser';
+    }
+
+    if (labelEl) {
+        labelEl.textContent = labelText;
+    }
+
+    if (hintEl) {
+        const unsupportedReason = state.status === 'unsupported' ? getUnsupportedReason() : null;
+        hintEl.textContent = unsupportedReason?.hint ?? '';
+        hintEl.classList.toggle('hidden', unsupportedReason === null);
+    }
+
+    const unsupported = state.status === 'unsupported';
+    const selected = state.status === 'selected';
+
+    if (chooseBtn instanceof HTMLButtonElement) {
+        chooseBtn.disabled = unsupported;
+        chooseBtn.setAttribute('aria-disabled', unsupported ? 'true' : 'false');
+    }
+
+    if (resetBtn instanceof HTMLButtonElement) {
+        resetBtn.disabled = !selected;
+        resetBtn.setAttribute('aria-disabled', selected ? 'false' : 'true');
+    }
+
+    if (noticeEl) {
+        const showNotice = typeof state.notice === 'string' && state.notice !== '';
+        noticeEl.textContent = showNotice ? state.notice : '';
+        noticeEl.classList.toggle('hidden', !showNotice);
+    }
+
+    const pickerEl = section.querySelector('[data-output-device-picker]');
+    if (pickerEl instanceof HTMLSelectElement && unsupported) {
+        pickerEl.classList.add('hidden');
+        pickerEl.replaceChildren();
+    }
+}
+
+/**
+ * @param {Element} section
+ */
+async function loadOutputDevicePicker(section) {
+    const chooseBtn = section.querySelector('[data-output-device-choose]');
+    const pickerEl = section.querySelector('[data-output-device-picker]');
+    if (!(pickerEl instanceof HTMLSelectElement)) {
+        return;
+    }
+
+    const originalLabel = chooseBtn instanceof HTMLButtonElement
+        ? chooseBtn.textContent
+        : 'Choose output device';
+
+    if (chooseBtn instanceof HTMLButtonElement) {
+        chooseBtn.disabled = true;
+        chooseBtn.textContent = 'Loading speakers…';
+    }
+
+    const devices = await prepareOutputDevicePicker();
+
+    if (chooseBtn instanceof HTMLButtonElement) {
+        chooseBtn.disabled = false;
+        chooseBtn.textContent = originalLabel ?? 'Choose output device';
+    }
+
+    if (devices.length === 0) {
+        return;
+    }
+
+    pickerEl.replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select a speaker…';
+    pickerEl.append(placeholder);
+
+    for (const device of devices) {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.textContent = device.label;
+        pickerEl.append(option);
+    }
+
+    pickerEl.classList.remove('hidden');
+    pickerEl.focus();
+}
+
+/**
+ * Idempotent document-level click binding for Choose / Use system default.
+ * Survives Livewire morph without duplicate listeners.
+ */
+function bindOutputDeviceUi() {
+    if (outputDeviceUiBound) {
+        return;
+    }
+
+    outputDeviceUiBound = true;
+
+    document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        const choose = target.closest('[data-output-device-choose]');
+        if (choose instanceof HTMLButtonElement) {
+            if (choose.disabled) {
+                return;
+            }
+
+            event.preventDefault();
+
+            if (getSelectionMode() === 'enumerate') {
+                const section = choose.closest('[data-output-device-section]');
+                if (section instanceof Element) {
+                    void loadOutputDevicePicker(section);
+                }
+
+                return;
+            }
+
+            void chooseOutputDevice();
+
+            return;
+        }
+
+        const reset = target.closest('[data-output-device-reset]');
+        if (reset instanceof HTMLButtonElement) {
+            if (reset.disabled) {
+                return;
+            }
+
+            event.preventDefault();
+            resetToSystemDefault();
+        }
+    });
+
+    document.addEventListener('change', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement) || !target.matches('[data-output-device-picker]')) {
+            return;
+        }
+
+        const option = target.selectedOptions[0];
+        if (!option || option.value === '') {
+            return;
+        }
+
+        selectOutputDevice({
+            deviceId: option.value,
+            label: option.textContent ?? 'Selected device',
+        });
+
+        target.classList.add('hidden');
+        target.value = '';
+    });
+}
 
 function closeStream(id) {
     const entry = streams.sources.get(id);
@@ -196,6 +394,7 @@ function reconcileUi() {
     reconcilePlaybackUi();
     reconcileTyping();
     reconcileScroll();
+    reconcileOutputDeviceUi();
 }
 
 document.addEventListener('livewire:init', () => {
@@ -228,6 +427,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 bindUi();
+
+initAudioOutputDevice();
+subscribeAudioOutputDevice(reconcileOutputDeviceUi);
+bindOutputDeviceUi();
+reconcileOutputDeviceUi();
 
 window.TranslationPlayback = {
     syncOrder,
