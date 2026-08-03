@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Services\TranslationLanguageCatalog;
 use App\Services\TranslationSpeakerCatalog;
+use App\Services\TranslationToneCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -22,6 +23,7 @@ class StartTranslationRequest extends FormRequest
         return [
             'text' => self::textRules(),
             'target_language' => self::targetLanguageRules(),
+            'translation_tone' => self::translationToneRules(),
             'speaker_mode' => self::speakerModeRules(),
             'custom_reference_id' => self::customReferenceIdRules('speaker_mode'),
         ];
@@ -56,6 +58,17 @@ class StartTranslationRequest extends FormRequest
         $catalog = app(TranslationLanguageCatalog::class);
 
         return ['required', 'string', Rule::in($catalog->codes())];
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    public static function translationToneRules(): array
+    {
+        /** @var TranslationToneCatalog $catalog */
+        $catalog = app(TranslationToneCatalog::class);
+
+        return $catalog->validationRules();
     }
 
     /**

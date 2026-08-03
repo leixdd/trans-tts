@@ -24,6 +24,7 @@ class TranslationWorkflowStore
      *     source_text: string,
      *     target_language: string,
      *     speaker_reference_id: string|null,
+     *     translation_tone: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -39,14 +40,19 @@ class TranslationWorkflowStore
         string $sourceText,
         ?string $targetLanguage = null,
         ?string $speakerReferenceId = null,
+        ?string $translationTone = null,
     ): array {
         if ($visitorId === '') {
             throw new RuntimeException('A visitor id is required to create a translation turn.');
         }
 
-        /** @var TranslationLanguageCatalog $catalog */
-        $catalog = app(TranslationLanguageCatalog::class);
-        $language = $catalog->normalize($targetLanguage);
+        /** @var TranslationLanguageCatalog $languages */
+        $languages = app(TranslationLanguageCatalog::class);
+        $language = $languages->normalize($targetLanguage);
+
+        /** @var TranslationToneCatalog $tones */
+        $tones = app(TranslationToneCatalog::class);
+        $tone = $tones->normalize($translationTone);
 
         $turn = TranslationTurn::query()->create([
             'visitor_id' => $visitorId,
@@ -54,6 +60,7 @@ class TranslationWorkflowStore
             'source_text' => $sourceText,
             'target_language' => $language,
             'speaker_reference_id' => $this->normalizeSpeakerReferenceId($speakerReferenceId),
+            'translation_tone' => $tone,
             'translation' => null,
             'stream_debug' => null,
             'worker_logs' => null,
@@ -75,6 +82,7 @@ class TranslationWorkflowStore
      *     source_text: string,
      *     target_language: string,
      *     speaker_reference_id: string|null,
+     *     translation_tone: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -110,6 +118,7 @@ class TranslationWorkflowStore
      *     source_text: string,
      *     target_language: string,
      *     speaker_reference_id: string|null,
+     *     translation_tone: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -261,6 +270,7 @@ class TranslationWorkflowStore
      *     source_text: string,
      *     target_language: string,
      *     speaker_reference_id: string|null,
+     *     translation_tone: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -285,7 +295,7 @@ class TranslationWorkflowStore
     }
 
     /**
-     * Session-scoped polling payload for the UI (never includes audio_path or speaker_reference_id).
+     * Session-scoped polling payload for the UI (never includes audio_path, speaker_reference_id, or translation_tone).
      *
      * @return array{
      *     id: string,
@@ -422,6 +432,7 @@ class TranslationWorkflowStore
      *     source_text: string,
      *     target_language: string,
      *     speaker_reference_id: string|null,
+     *     translation_tone: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -454,7 +465,7 @@ class TranslationWorkflowStore
         $catalog = app(TranslationLanguageCatalog::class);
         $targetLanguage = $catalog->normalize($workflow['target_language']);
 
-        // Intentionally omit speaker_reference_id — private operational field only.
+        // Intentionally omit speaker_reference_id and translation_tone — private operational fields only.
         return [
             'id' => $workflow['id'],
             'status' => $workflow['status'],
@@ -483,6 +494,7 @@ class TranslationWorkflowStore
      *     source_text: string,
      *     target_language: string,
      *     speaker_reference_id: string|null,
+     *     translation_tone: string,
      *     translation: string|null,
      *     stream_debug: string|null,
      *     worker_logs: string|null,
@@ -495,16 +507,20 @@ class TranslationWorkflowStore
      */
     private function toArray(TranslationTurn $turn): array
     {
-        /** @var TranslationLanguageCatalog $catalog */
-        $catalog = app(TranslationLanguageCatalog::class);
+        /** @var TranslationLanguageCatalog $languages */
+        $languages = app(TranslationLanguageCatalog::class);
+
+        /** @var TranslationToneCatalog $tones */
+        $tones = app(TranslationToneCatalog::class);
 
         return [
             'id' => $turn->id,
             'visitor_id' => $turn->visitor_id,
             'status' => $turn->status,
             'source_text' => $turn->source_text,
-            'target_language' => $catalog->normalize($turn->target_language ?? null),
+            'target_language' => $languages->normalize($turn->target_language ?? null),
             'speaker_reference_id' => $this->normalizeSpeakerReferenceId($turn->speaker_reference_id),
+            'translation_tone' => $tones->normalize($turn->translation_tone ?? null),
             'translation' => $turn->translation,
             'stream_debug' => $turn->stream_debug,
             'worker_logs' => $turn->worker_logs,

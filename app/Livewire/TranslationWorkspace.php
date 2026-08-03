@@ -7,6 +7,7 @@ use App\Http\Requests\StartTranslationRequest;
 use App\Services\AnonymousVisitor;
 use App\Services\TranslationLanguageCatalog;
 use App\Services\TranslationSpeakerCatalog;
+use App\Services\TranslationToneCatalog;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Computed;
@@ -20,6 +21,8 @@ class TranslationWorkspace extends Component
 {
     private const SESSION_TARGET_LANGUAGE_KEY = 'translation_target_language';
 
+    private const SESSION_TRANSLATION_TONE_KEY = 'translation_tone';
+
     private const SESSION_SPEAKER_MODE_KEY = 'translation_speaker_mode';
 
     private const SESSION_CUSTOM_REFERENCE_ID_KEY = 'translation_speaker_custom_reference_id';
@@ -27,6 +30,8 @@ class TranslationWorkspace extends Component
     public string $text = '';
 
     public string $targetLanguage = 'ja';
+
+    public string $translationTone = TranslationToneCatalog::CODE_NORMAL;
 
     public string $speakerMode = TranslationSpeakerCatalog::MODE_SYSTEM;
 
@@ -63,10 +68,14 @@ class TranslationWorkspace extends Component
         AnonymousVisitor $visitors,
         TranslationWorkflowStore $store,
         TranslationLanguageCatalog $languages,
+        TranslationToneCatalog $tones,
         TranslationSpeakerCatalog $speakers,
     ): void {
         $stored = session(self::SESSION_TARGET_LANGUAGE_KEY);
         $this->targetLanguage = $languages->normalize(is_string($stored) ? $stored : null);
+
+        $storedTone = session(self::SESSION_TRANSLATION_TONE_KEY);
+        $this->translationTone = $tones->normalize(is_string($storedTone) ? $storedTone : null);
 
         $storedMode = session(self::SESSION_SPEAKER_MODE_KEY);
         $storedCustom = session(self::SESSION_CUSTOM_REFERENCE_ID_KEY);
@@ -88,6 +97,15 @@ class TranslationWorkspace extends Component
         }
 
         session([self::SESSION_TARGET_LANGUAGE_KEY => $this->targetLanguage]);
+    }
+
+    public function updatedTranslationTone(TranslationToneCatalog $tones): void
+    {
+        if (! $tones->isSupported($this->translationTone)) {
+            return;
+        }
+
+        session([self::SESSION_TRANSLATION_TONE_KEY => $this->translationTone]);
     }
 
     public function updatedSpeakerMode(TranslationSpeakerCatalog $speakers): void
@@ -131,6 +149,15 @@ class TranslationWorkspace extends Component
     public function languageOptions(): array
     {
         return app(TranslationLanguageCatalog::class)->options();
+    }
+
+    /**
+     * @return list<array{code: string, label: string}>
+     */
+    #[Computed]
+    public function toneOptions(): array
+    {
+        return app(TranslationToneCatalog::class)->options();
     }
 
     /**
@@ -204,6 +231,7 @@ class TranslationWorkspace extends Component
             [
                 'text' => StartTranslationRequest::textRules(),
                 'targetLanguage' => StartTranslationRequest::targetLanguageRules(),
+                'translationTone' => StartTranslationRequest::translationToneRules(),
                 'speakerMode' => StartTranslationRequest::speakerModeRules(),
                 'customReferenceId' => StartTranslationRequest::customReferenceIdRules('speakerMode'),
             ],
@@ -216,6 +244,7 @@ class TranslationWorkspace extends Component
 
         session([
             self::SESSION_TARGET_LANGUAGE_KEY => $this->targetLanguage,
+            self::SESSION_TRANSLATION_TONE_KEY => $this->translationTone,
             self::SESSION_SPEAKER_MODE_KEY => $this->speakerMode,
             self::SESSION_CUSTOM_REFERENCE_ID_KEY => $this->customReferenceId,
         ]);
@@ -228,6 +257,7 @@ class TranslationWorkspace extends Component
             $this->targetLanguage,
             $this->speakerMode,
             $this->customReferenceId,
+            $this->translationTone,
         );
 
         $this->text = '';

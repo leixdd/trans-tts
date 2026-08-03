@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
  * @property string $source_text
  * @property string $target_language
  * @property string|null $speaker_reference_id
+ * @property string $translation_tone
  * @property string|null $translation
  * @property string|null $stream_debug
  * @property string|null $worker_logs
@@ -35,6 +36,7 @@ class TranslationTurn extends Model
         'source_text',
         'target_language',
         'speaker_reference_id',
+        'translation_tone',
         'translation',
         'stream_debug',
         'worker_logs',

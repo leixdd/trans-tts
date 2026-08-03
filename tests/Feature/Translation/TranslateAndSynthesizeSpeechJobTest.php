@@ -3,6 +3,7 @@
 use App\Jobs\TranslateAndSynthesizeSpeech;
 use App\Services\AIProviderSpeechService;
 use App\Services\AIProviderTranslationService;
+use App\Services\TranslationToneCatalog;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -406,4 +407,97 @@ it('fails clearly when the Fish reference id is missing', function () {
 
     expect($store->find($workflow['id'])['error'])
         ->toBe('Translation service is not configured. Please try again later.');
+});
+
+it('includes the business tone directive in the translation system prompt', function () {
+    fakeAIProviders('Professional translation');
+
+    $store = app(TranslationWorkflowStore::class);
+    $workflow = $store->create(
+        'session-a',
+        'Hello world',
+        'ja',
+        'test-fish-ref',
+        TranslationToneCatalog::CODE_BUSINESS,
+    );
+
+    (new TranslateAndSynthesizeSpeech($workflow['id']))->handle(
+        $store,
+        app(AIProviderTranslationService::class),
+        app(AIProviderSpeechService::class),
+    );
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'chat/completions')) {
+            return false;
+        }
+
+        $messages = $request->data()['messages'] ?? [];
+        $system = $messages[0]['content'] ?? '';
+
+        return is_string($system)
+            && str_contains($system, 'Japanese')
+            && str_contains($system, 'professional')
+            && str_contains($system, 'only the translation text');
+    });
+});
+
+it('includes the academic tone directive in the translation system prompt', function () {
+    fakeAIProviders('Scholarly translation');
+
+    $store = app(TranslationWorkflowStore::class);
+    $workflow = $store->create(
+        'session-a',
+        'Hello world',
+        'en',
+        'test-fish-ref',
+        TranslationToneCatalog::CODE_ACADEMIC,
+    );
+
+    (new TranslateAndSynthesizeSpeech($workflow['id']))->handle(
+        $store,
+        app(AIProviderTranslationService::class),
+        app(AIProviderSpeechService::class),
+    );
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'chat/completions')) {
+            return false;
+        }
+
+        $messages = $request->data()['messages'] ?? [];
+        $system = $messages[0]['content'] ?? '';
+
+        return is_string($system)
+            && str_contains($system, 'English')
+            && str_contains($system, 'formal')
+            && str_contains($system, 'only the translation text');
+    });
+});
+
+it('uses normal tone directive when turn tone is missing or legacy', function () {
+    fakeAIProviders('Neutral translation');
+
+    $store = app(TranslationWorkflowStore::class);
+    $workflow = $store->create('session-a', 'Hello world', 'ja', 'test-fish-ref', null);
+
+    (new TranslateAndSynthesizeSpeech($workflow['id']))->handle(
+        $store,
+        app(AIProviderTranslationService::class),
+        app(AIProviderSpeechService::class),
+    );
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'chat/completions')) {
+            return false;
+        }
+
+        $messages = $request->data()['messages'] ?? [];
+        $system = $messages[0]['content'] ?? '';
+
+        return is_string($system)
+            && str_contains($system, 'Japanese')
+            && str_contains($system, 'natural, neutral')
+            && str_contains($system, 'only the translation text');
+    });
 });

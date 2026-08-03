@@ -3,6 +3,7 @@
 use App\Actions\StartTranslationWorkflow;
 use App\Jobs\TranslateAndSynthesizeSpeech;
 use App\Services\TranslationSpeakerCatalog;
+use App\Services\TranslationToneCatalog;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
@@ -160,4 +161,72 @@ it('returns generic validation messages that do not echo reference ids', functio
     }
 
     expect(false)->toBeTrue('Expected ValidationException was not thrown.');
+});
+
+it('rejects unsupported translation tone when starting a workflow', function () {
+    Queue::fake();
+
+    expect(fn () => app(StartTranslationWorkflow::class)(
+        'visitor-a',
+        'Hello',
+        'ja',
+        TranslationSpeakerCatalog::MODE_SYSTEM,
+        null,
+        'casual',
+    ))->toThrow(ValidationException::class);
+
+    Queue::assertNothingPushed();
+});
+
+it('captures the selected translation tone on the turn at submission', function () {
+    Queue::fake();
+
+    $result = app(StartTranslationWorkflow::class)(
+        'visitor-a',
+        'Hello',
+        'en',
+        TranslationSpeakerCatalog::MODE_SYSTEM,
+        null,
+        TranslationToneCatalog::CODE_BUSINESS,
+    );
+
+    $workflow = app(TranslationWorkflowStore::class)->find($result['id']);
+
+    expect($workflow['translation_tone'])->toBe(TranslationToneCatalog::CODE_BUSINESS);
+});
+
+it('keeps the turn tone snapshot immutable after later submissions with different tone', function () {
+    Queue::fake();
+
+    $start = app(StartTranslationWorkflow::class);
+
+    $first = $start(
+        'visitor-a',
+        'First',
+        'en',
+        TranslationSpeakerCatalog::MODE_SYSTEM,
+        null,
+        TranslationToneCatalog::CODE_BUSINESS,
+    );
+    $second = $start(
+        'visitor-a',
+        'Second',
+        'en',
+        TranslationSpeakerCatalog::MODE_SYSTEM,
+        null,
+        TranslationToneCatalog::CODE_ACADEMIC,
+    );
+
+    $store = app(TranslationWorkflowStore::class);
+
+    expect($store->find($first['id'])['translation_tone'])->toBe(TranslationToneCatalog::CODE_BUSINESS)
+        ->and($store->find($second['id'])['translation_tone'])->toBe(TranslationToneCatalog::CODE_ACADEMIC);
+});
+
+it('normalizes missing translation tone to normal when creating a turn via the store', function () {
+    $store = app(TranslationWorkflowStore::class);
+
+    $workflow = $store->create('visitor-a', 'Hello', 'ja', 'test-fish-ref', null);
+
+    expect($workflow['translation_tone'])->toBe(TranslationToneCatalog::CODE_NORMAL);
 });

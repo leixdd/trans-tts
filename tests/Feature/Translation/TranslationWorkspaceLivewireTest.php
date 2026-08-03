@@ -4,6 +4,7 @@ use App\Jobs\TranslateAndSynthesizeSpeech;
 use App\Livewire\TranslationWorkspace;
 use App\Services\AnonymousVisitor;
 use App\Services\TranslationSpeakerCatalog;
+use App\Services\TranslationToneCatalog;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
@@ -314,4 +315,109 @@ it('keeps composer empty after submit and surfaces failure in the thread', funct
         ->assertSee('Keep this text')
         ->assertSee('Translation failed. Please try again.')
         ->assertSet('text', '');
+});
+
+it('defaults translation tone to normal and exposes tone options', function () {
+    Livewire::test(TranslationWorkspace::class)
+        ->assertSet('translationTone', TranslationToneCatalog::CODE_NORMAL)
+        ->assertSee('Normal Mode')
+        ->assertSee('Business Mode')
+        ->assertSee('Academic Mode')
+        ->assertSee('data-translation-tone', false)
+        ->assertSee('id="translation-tone"', false);
+});
+
+it('persists translation tone in session across remount', function () {
+    Livewire::test(TranslationWorkspace::class)
+        ->set('translationTone', TranslationToneCatalog::CODE_BUSINESS)
+        ->assertSet('translationTone', TranslationToneCatalog::CODE_BUSINESS);
+
+    expect(session('translation_tone'))->toBe(TranslationToneCatalog::CODE_BUSINESS);
+
+    Livewire::test(TranslationWorkspace::class)
+        ->assertSet('translationTone', TranslationToneCatalog::CODE_BUSINESS);
+});
+
+it('rejects unsupported translation tone on submit without dispatching', function () {
+    Queue::fake();
+
+    Livewire::test(TranslationWorkspace::class)
+        ->set('text', 'Hello')
+        ->set('translationTone', 'casual')
+        ->call('submit')
+        ->assertHasErrors(['translationTone']);
+
+    Queue::assertNothingPushed();
+});
+
+it('captures the selected translation tone on the turn at submission', function () {
+    Queue::fake();
+
+    $visitorId = '99999999-9999-4999-8999-999999999999';
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->set('text', 'Hello')
+        ->set('translationTone', TranslationToneCatalog::CODE_ACADEMIC)
+        ->call('submit');
+
+    $workflow = app(TranslationWorkflowStore::class)->listForVisitor($visitorId);
+    $turn = app(TranslationWorkflowStore::class)->find($workflow[0]['id']);
+
+    expect($turn['translation_tone'])->toBe(TranslationToneCatalog::CODE_ACADEMIC);
+});
+
+it('omits translation tone from public turn payloads', function () {
+    Queue::fake();
+
+    $visitorId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab';
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->set('text', 'Hello')
+        ->set('translationTone', TranslationToneCatalog::CODE_BUSINESS)
+        ->call('submit');
+
+    $turns = app(TranslationWorkflowStore::class)->listForVisitor($visitorId);
+
+    expect($turns)->toHaveCount(1)
+        ->and($turns[0])->not->toHaveKey('translation_tone')
+        ->and(collect($turns[0])->keys())->not->toContain('translation_tone');
+
+    $public = app(TranslationWorkflowStore::class)->publicStatus($turns[0]['id'], $visitorId);
+
+    expect($public)->not->toHaveKey('translation_tone');
+});
+
+it('keeps the turn tone snapshot immutable after later submissions with different tone', function () {
+    Queue::fake();
+
+    $visitorId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    $store = app(TranslationWorkflowStore::class);
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->set('translationTone', TranslationToneCatalog::CODE_BUSINESS)
+        ->set('text', 'First')
+        ->call('submit');
+
+    $firstTurnId = \App\Models\TranslationTurn::query()
+        ->where('visitor_id', $visitorId)
+        ->where('source_text', 'First')
+        ->value('id');
+
+    Livewire::withCookie(AnonymousVisitor::COOKIE_NAME, $visitorId)
+        ->test(TranslationWorkspace::class)
+        ->set('translationTone', TranslationToneCatalog::CODE_ACADEMIC)
+        ->assertSet('translationTone', TranslationToneCatalog::CODE_ACADEMIC)
+        ->set('text', 'Second')
+        ->call('submit');
+
+    $secondTurnId = \App\Models\TranslationTurn::query()
+        ->where('visitor_id', $visitorId)
+        ->where('source_text', 'Second')
+        ->value('id');
+
+    expect($store->find((string) $firstTurnId)['translation_tone'])->toBe(TranslationToneCatalog::CODE_BUSINESS)
+        ->and($store->find((string) $secondTurnId)['translation_tone'])->toBe(TranslationToneCatalog::CODE_ACADEMIC);
 });
