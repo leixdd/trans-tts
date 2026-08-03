@@ -12,23 +12,33 @@ class AIProviderTranslationService
 {
     public function __construct(
         private readonly TranslationLanguageCatalog $languages,
+        private readonly TranslationToneCatalog $tones,
     ) {}
 
     /**
      * Translate source text into the allow-listed target language via AIProvider streaming chat.
      *
      * Stateless and Octane-safe: no request-specific mutable properties.
+     * System prompt = language instruction + tone directive; response must remain translation-only.
      *
      * @param  (callable(string $delta, string $accumulated, string $rawSseData): void)|null  $onChunk
      *
      * @throws RuntimeException
      */
-    public function translate(string $sourceText, string $targetLanguage, ?callable $onChunk = null): string
-    {
+    public function translate(
+        string $sourceText,
+        string $targetLanguage,
+        ?callable $onChunk = null,
+        ?string $tone = null,
+    ): string {
         $language = $this->languages->normalize($targetLanguage);
+        $toneCode = $this->tones->normalize($tone);
 
         try {
-            $systemPrompt = $this->languages->translationPrompt($language);
+            $systemPrompt = trim(
+                $this->languages->translationPrompt($language)
+                .' '.$this->tones->promptDirective($toneCode)
+            );
         } catch (Throwable $exception) {
             throw new RuntimeException($exception->getMessage(), 0, $exception);
         }

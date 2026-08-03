@@ -227,6 +227,18 @@
                         @endforeach
                     </select>
 
+                    <label for="translation-tone" class="sr-only">Translation tone</label>
+                    <select
+                        id="translation-tone"
+                        data-translation-tone
+                        wire:model.live="translationTone"
+                        class="rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm font-medium text-stone-800 shadow-sm outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20"
+                    >
+                        @foreach ($this->toneOptions as $option)
+                            <option value="{{ $option['code'] }}">{{ $option['label'] }}</option>
+                        @endforeach
+                    </select>
+
                     <div
                         class="relative"
                         data-speaker-settings
@@ -396,6 +408,9 @@
                 <p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>
             @enderror
             @error('targetLanguage')
+                <p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>
+            @enderror
+            @error('translationTone')
                 <p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>
             @enderror
             @error('speakerMode')

@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Http\Requests\StartTranslationRequest;
 use App\Jobs\TranslateAndSynthesizeSpeech;
 use App\Services\TranslationSpeakerCatalog;
+use App\Services\TranslationToneCatalog;
 use App\Services\TranslationWorkflowStore;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -17,7 +18,7 @@ class StartTranslationWorkflow
     ) {}
 
     /**
-     * Validate input, create a queued turn with an immutable speaker snapshot, and dispatch synthesis.
+     * Validate input, create a queued turn with immutable speaker/tone snapshots, and dispatch synthesis.
      *
      * @return array{id: string, status: string}
      *
@@ -29,6 +30,7 @@ class StartTranslationWorkflow
         string $targetLanguage,
         string $speakerMode = TranslationSpeakerCatalog::MODE_SYSTEM,
         ?string $customReferenceId = null,
+        string $translationTone = TranslationToneCatalog::CODE_NORMAL,
     ): array {
         $validated = Validator::make(
             [
@@ -37,6 +39,7 @@ class StartTranslationWorkflow
                 'target_language' => $targetLanguage,
                 'speaker_mode' => $speakerMode,
                 'custom_reference_id' => $customReferenceId,
+                'translation_tone' => $translationTone,
             ],
             [
                 'visitor_id' => ['required', 'string'],
@@ -44,6 +47,7 @@ class StartTranslationWorkflow
                 'target_language' => StartTranslationRequest::targetLanguageRules(),
                 'speaker_mode' => StartTranslationRequest::speakerModeRules(),
                 'custom_reference_id' => StartTranslationRequest::customReferenceIdRules('speaker_mode'),
+                'translation_tone' => StartTranslationRequest::translationToneRules(),
             ],
             [
                 'custom_reference_id.required_if' => 'A custom speaker reference ID is required.',
@@ -63,6 +67,7 @@ class StartTranslationWorkflow
             $validated['text'],
             $validated['target_language'],
             $speakerReferenceId,
+            $validated['translation_tone'],
         );
 
         $this->store->appendWorkerLog(

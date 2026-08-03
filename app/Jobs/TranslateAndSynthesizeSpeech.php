@@ -69,6 +69,7 @@ class TranslateAndSynthesizeSpeech implements ShouldBeUnique, ShouldQueue
                     function (string $delta, string $accumulated, string $rawSseData) use ($store): void {
                         $store->appendStreamDebug($this->workflowId, $accumulated, $rawSseData);
                     },
+                    $workflow['translation_tone'] ?? null,
                 );
                 $store->setTranslation($this->workflowId, $translation);
                 $store->appendWorkerLog(

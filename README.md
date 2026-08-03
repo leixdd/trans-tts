@@ -97,11 +97,29 @@ Shared volumes persist the SQLite database and private WAV files under `storage/
 
 ## Chat input and history
 
-In the source textarea, **Enter** submits Translate & Speak; **Shift+Enter** inserts a newline. The target language select next to the submit button defaults to Japanese and is remembered for the browser session (`translation_target_language`). A compact **Audio settings** control sits beside the language selector (see [Output device routing](#output-device-routing) and [Default speaker](#default-speaker) below). Each assistant bubble shows the turn’s target language.
+In the source textarea, **Enter** submits Translate & Speak; **Shift+Enter** inserts a newline. The target language select next to the submit button defaults to Japanese and is remembered for the browser session (`translation_target_language`). An inline **translation tone** select sits beside the language selector (see [Translation tone](#translation-tone) below). A compact **Audio settings** control sits next to those controls (see [Output device routing](#output-device-routing) and [Default speaker](#default-speaker) below). Each assistant bubble shows the turn’s target language.
 
 Turns are stored in the `translation_turns` table (including `target_language`) and keyed by an anonymous encrypted `tts_visitor` cookie (not a user account). Each visitor keeps at most `AI_PROVIDER_HISTORY_LIMIT` turns for `AI_PROVIDER_RETENTION_DAYS`. Private WAV files live under `storage/app/private/translation-audio` and are streamed only through signed URLs for the owning visitor.
 
 While a turn is in flight, the assistant bubble shows a writing indicator. When translated text arrives (SSE snapshot or Livewire morph), it types in grapheme-by-grapheme (`resources/js/translation-typing.js`). History restored on first paint is shown instantly (no replay).
+
+## Translation tone
+
+The inline **translation tone** select (`#translation-tone`) sits beside the target language selector. Three fixed modes control how the AIProvider translation prompt is styled:
+
+| Mode | Effect |
+|------|--------|
+| **Normal Mode** (default) | Natural, neutral wording |
+| **Business Mode** | Concise, professional, workplace-appropriate wording |
+| **Academic Mode** | Formal, precise, scholarly wording |
+
+The choice uses the Laravel session lifecycle (`translation_tone`) and survives page reloads within the same browser session. It is not stored in browser `localStorage` or tied to a user account.
+
+On submit, the selected tone code is snapshotted on each turn (`translation_tone`) before queue dispatch. Changing the selector later does not alter already queued or completed turns. Legacy turns without an explicit tone normalize to Normal Mode.
+
+Tone affects translation prompt composition only (a directive appended alongside the language instruction). TTS voice, playback FIFO, and SSE behavior are unchanged. Exact stylistic quality is **prompt-driven** and depends on the translation provider.
+
+Tone codes are omitted from chat history, public turn payloads, and the UI in this version. Mode definitions and prompt directives live in `config/translation_tones.php`.
 
 ## Audio playback
 
@@ -203,9 +221,10 @@ bun run test:e2e:install   # once — installs Playwright Chromium
 bun run test:e2e           # browser playback + audio settings acceptance (starts webServer)
 bun run test:e2e tests/e2e/output-device.spec.js  # output device routing acceptance
 bun run test:e2e tests/e2e/speaker-setting.spec.js  # default speaker acceptance
+bun run test:e2e tests/e2e/translation-tone.spec.js  # translation tone acceptance
 ```
 
-Playwright e2e tests seed a deterministic playback fixture (run `php artisan migrate` first so the dev database includes all schema columns, including `speaker_reference_id` on `translation_turns`), start `php artisan serve` on port 8765, and assert Play/Stop icon visibility, FIFO stop-and-advance behavior, audio settings panel states, and output-device routing with mocked `selectAudioOutput` / `setSinkId`. Override the base URL with `PLAYWRIGHT_BASE_URL`; set `CI=1` to disable server reuse and enable one retry. Failure artifacts land under `tests/e2e/test-results/`; HTML report under `tests/e2e/playwright-report/`.
+Playwright e2e tests seed a deterministic playback fixture (run `php artisan migrate` first so the dev database includes all schema columns, including `speaker_reference_id` and `translation_tone` on `translation_turns`), start `php artisan serve` on port 8765, and assert Play/Stop icon visibility, FIFO stop-and-advance behavior, audio settings panel states, output-device routing with mocked `selectAudioOutput` / `setSinkId`, and translation tone selector behavior. Override the base URL with `PLAYWRIGHT_BASE_URL`; set `CI=1` to disable server reuse and enable one retry. Failure artifacts land under `tests/e2e/test-results/`; HTML report under `tests/e2e/playwright-report/`.
 
 Focused speaker backend coverage:
 
@@ -213,6 +232,15 @@ Focused speaker backend coverage:
 vendor/bin/pest tests/Unit/Services/TranslationSpeakerCatalogTest.php \
   tests/Feature/Translation/StartTranslationWorkflowTest.php \
   tests/Feature/Translation/TranslationWorkspaceLivewireTest.php \
+  tests/Feature/Translation/TranslateAndSynthesizeSpeechJobTest.php
+```
+
+Focused tone backend coverage:
+
+```bash
+vendor/bin/pest tests/Unit/Services/TranslationToneCatalogTest.php \
+  tests/Feature/Translation/TranslationWorkspaceLivewireTest.php \
+  tests/Feature/Translation/StartTranslationWorkflowTest.php \
   tests/Feature/Translation/TranslateAndSynthesizeSpeechJobTest.php
 ```
 
